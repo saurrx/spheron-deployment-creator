@@ -81,10 +81,10 @@ interface DeploymentResponse {
   };
   details: {
     status: string;
-    forwarded_ports: Array<{
+    forwarded_ports: {
       port: number;
       as: number;
-    }>;
+    }[] | null | undefined;
   };
   lease: {
     status: string;
@@ -190,16 +190,19 @@ export default function Home() {
                   <div>
                     <h3 className="font-medium">Deployment Status</h3>
                     <p>Status: {deploymentInfo.details.status}</p>
-                    <div className="mt-2">
-                      <h4 className="font-medium">Forwarded Ports:</h4>
-                      <ul className="list-disc list-inside">
-                        {deploymentInfo.details.forwarded_ports?.map((port, idx) => (
-                          <li key={idx}>
-                            Port {port.port} as {port.as}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
+                    {Array.isArray(deploymentInfo.details.forwarded_ports) && 
+                     deploymentInfo.details.forwarded_ports.length > 0 && (
+                      <div className="mt-2">
+                        <h4 className="font-medium">Forwarded Ports:</h4>
+                        <ul className="list-disc list-inside">
+                          {deploymentInfo.details.forwarded_ports.map((port, idx) => (
+                            <li key={idx}>
+                              Port {port.port} as {port.as}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -256,8 +259,8 @@ export default function Home() {
                   )}
                 />
 
-                <Button 
-                  type="submit" 
+                <Button
+                  type="submit"
                   disabled={deployMutation.isPending}
                   className="w-full"
                 >
