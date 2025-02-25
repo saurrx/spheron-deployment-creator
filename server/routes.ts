@@ -18,12 +18,37 @@ if (!PRIVATE_KEY) {
 // Initialize SDK with testnet network explicitly
 const sdk = new SpheronSDK("testnet", PRIVATE_KEY);
 
+// Helper function to safely convert bigint to string in objects
+function sanitizeResponse(obj: any): any {
+  if (obj === null || obj === undefined) {
+    return obj;
+  }
+
+  if (typeof obj === 'bigint') {
+    return obj.toString();
+  }
+
+  if (Array.isArray(obj)) {
+    return obj.map(sanitizeResponse);
+  }
+
+  if (typeof obj === 'object') {
+    const sanitized: any = {};
+    for (const [key, value] of Object.entries(obj)) {
+      sanitized[key] = sanitizeResponse(value);
+    }
+    return sanitized;
+  }
+
+  return obj;
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Get CST balance from escrow
   app.get("/api/balance", async (req, res) => {
     try {
       const balance = await sdk.escrow.getUserBalance("CST");
-      res.json(balance);
+      res.json(sanitizeResponse(balance));
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }
@@ -61,13 +86,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Store deployment info
       const stored = await storage.createDeployment(parsed);
 
-      // Return comprehensive deployment information
-      res.json({
+      // Return comprehensive deployment information with sanitized values
+      res.json(sanitizeResponse({
         deployment: stored,
         transaction: deploymentTxn,
         details: deploymentDetails,
         lease: leaseDetails
-      });
+      }));
     } catch (error: any) {
       res.status(400).json({ message: error.message });
     }
