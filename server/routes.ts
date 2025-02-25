@@ -81,6 +81,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
           PROVIDER_PROXY_URL
         );
         leaseDetails = await sdk.leases.getLeaseDetails(deploymentTxn.leaseId);
+
+        // Get additional details from the lease contract
+        const leaseContractDetails = await sdk.leases.getLeaseStatusByLeaseId(deploymentTxn.leaseId);
+
+        // Combine all the details
+        deploymentDetails = {
+          ...deploymentDetails,
+          provider: leaseContractDetails.provider,
+          pricePerHour: leaseContractDetails.pricePerHour,
+          startTime: leaseContractDetails.startTime,
+          remainingTime: leaseContractDetails.remainingTime,
+          services: deploymentDetails.services || {}
+        };
       }
 
       // Store deployment info

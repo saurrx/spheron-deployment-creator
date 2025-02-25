@@ -81,10 +81,25 @@ interface DeploymentResponse {
   };
   details: {
     status: string;
+    provider: string;
+    pricePerHour: string;
+    startTime: string;
+    remainingTime: string;
     forwarded_ports: {
       port: number;
       as: number;
+      protocol?: string;
     }[] | null | undefined;
+    services: {
+      [key: string]: {
+        urls: string[];
+        ports: string[];
+        replicas: string;
+        hostUri: string;
+        region: string;
+        ips: string[];
+      };
+    };
   };
   lease: {
     status: string;
@@ -187,23 +202,59 @@ export default function Home() {
                 </div>
 
                 {deploymentInfo.details && (
-                  <div>
-                    <h3 className="font-medium">Deployment Status</h3>
-                    <p>Status: {deploymentInfo.details.status}</p>
-                    {Array.isArray(deploymentInfo.details.forwarded_ports) && 
-                     deploymentInfo.details.forwarded_ports.length > 0 && (
-                      <div className="mt-2">
-                        <h4 className="font-medium">Forwarded Ports:</h4>
-                        <ul className="list-disc list-inside">
-                          {deploymentInfo.details.forwarded_ports.map((port, idx) => (
-                            <li key={idx}>
-                              Port {port.port} as {port.as}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
+                  <>
+                    <div>
+                      <h3 className="font-medium">Deployment Status</h3>
+                      <p>Status: {deploymentInfo.details.status}</p>
+                      <p>Provider: {deploymentInfo.details.provider}</p>
+                      <p>Price per hour: {deploymentInfo.details.pricePerHour} CST</p>
+                      <p>Start time: {new Date(deploymentInfo.details.startTime).toLocaleString()}</p>
+                      <p>Remaining time: {deploymentInfo.details.remainingTime}</p>
+                    </div>
+
+                    <div>
+                      <h3 className="font-medium">Services</h3>
+                      {Object.entries(deploymentInfo.details.services || {}).map(([serviceName, service]) => (
+                        <div key={serviceName} className="mt-2 p-4 bg-muted rounded-lg">
+                          <h4 className="font-medium">{serviceName}</h4>
+                          {service.urls.length > 0 && (
+                            <p>URLs: {service.urls.join(', ')}</p>
+                          )}
+                          {service.ports.length > 0 && (
+                            <div>
+                              <p className="font-medium mb-1">Ports:</p>
+                              <ul className="list-disc list-inside">
+                                {service.ports.map((port, idx) => (
+                                  <li key={idx}>{port}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                          <p>Replicas: {service.replicas}</p>
+                          <p>Host URI: {service.hostUri}</p>
+                          <p>Region: {service.region}</p>
+                          {service.ips.length > 0 && (
+                            <p>IPs: {service.ips.join(', ')}</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+
+                    {Array.isArray(deploymentInfo.details.forwarded_ports) &&
+                      deploymentInfo.details.forwarded_ports.length > 0 && (
+                        <div>
+                          <h3 className="font-medium">Forwarded Ports</h3>
+                          <ul className="list-disc list-inside">
+                            {deploymentInfo.details.forwarded_ports.map((port, idx) => (
+                              <li key={idx}>
+                                {port.protocol ? `${port.protocol}: ` : ""}
+                                Port {port.port} as {port.as}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                  </>
                 )}
 
                 {deploymentInfo.lease && (
