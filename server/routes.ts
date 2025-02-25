@@ -19,10 +19,10 @@ if (!PRIVATE_KEY) {
 const sdk = new SpheronSDK("testnet", PRIVATE_KEY);
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Get USDT balance from escrow
+  // Get CST balance from escrow
   app.get("/api/balance", async (req, res) => {
     try {
-      const balance = await sdk.escrow.getUserBalance("USDT");
+      const balance = await sdk.escrow.getUserBalance("CST");
       res.json(balance);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
@@ -35,9 +35,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const parsed = insertDeploymentSchema.parse(req.body);
 
       // Check balance first
-      const balance = await sdk.escrow.getUserBalance("USDT");
+      const balance = await sdk.escrow.getUserBalance("CST");
       if (!balance || parseFloat(balance.unlockedBalance) <= 0) {
-        throw new Error("Insufficient USDT balance in escrow");
+        throw new Error("Insufficient CST balance in escrow");
       }
 
       // Create deployment using SDK

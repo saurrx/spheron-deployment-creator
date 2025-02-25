@@ -131,17 +131,17 @@ export default function Home() {
             {escrowBalance ? (
               <div className="space-y-2">
                 <p className="text-lg">
-                  Available Balance: {escrowBalance.unlockedBalance} USDT
+                  Available Balance: {escrowBalance.unlockedBalance} CST
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  Locked in deployments: {escrowBalance.lockedBalance} USDT
+                  Locked in deployments: {escrowBalance.lockedBalance} CST
                 </p>
               </div>
             ) : (
               <Alert>
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>
-                  Unable to fetch balance. Please ensure you have sufficient funds.
+                  Unable to fetch balance. Please ensure you have sufficient CST funds.
                 </AlertDescription>
               </Alert>
             )}
