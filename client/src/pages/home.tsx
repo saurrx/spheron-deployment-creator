@@ -133,7 +133,7 @@ export default function Home() {
       setDeploymentInfo(data);
       toast({
         title: "Deployment Created",
-        description: "Your deployment has been created successfully",
+        description: "Your deployment has been created successfully. Fetching deployment details...",
       });
       form.reset({
         name: "ollama-deployment",

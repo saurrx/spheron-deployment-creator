@@ -76,24 +76,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let leaseDetails = null;
 
       if (deploymentTxn.leaseId) {
-        deploymentDetails = await sdk.deployment.getDeployment(
-          deploymentTxn.leaseId,
-          PROVIDER_PROXY_URL
-        );
-        leaseDetails = await sdk.leases.getLeaseDetails(deploymentTxn.leaseId);
+        try {
+          // Get deployment details
+          deploymentDetails = await sdk.deployment.getDeployment(
+            deploymentTxn.leaseId,
+            PROVIDER_PROXY_URL
+          );
 
-        // Get additional details from the lease contract
-        const leaseContractDetails = await sdk.leases.getLeaseStatusByLeaseId(deploymentTxn.leaseId);
+          // Get lease details
+          leaseDetails = await sdk.leases.getLeaseDetails(deploymentTxn.leaseId);
 
-        // Combine all the details
-        deploymentDetails = {
-          ...deploymentDetails,
-          provider: leaseContractDetails.provider,
-          pricePerHour: leaseContractDetails.pricePerHour,
-          startTime: leaseContractDetails.startTime,
-          remainingTime: leaseContractDetails.remainingTime,
-          services: deploymentDetails.services || {}
-        };
+          // Get lease status
+          const leaseStatus = await sdk.leases.getLeaseStatusByLeaseId(deploymentTxn.leaseId);
+
+          // Combine all the details
+          deploymentDetails = {
+            ...deploymentDetails,
+            provider: leaseStatus?.provider || "",
+            pricePerHour: leaseStatus?.pricePerHour?.toString() || "0",
+            startTime: leaseStatus?.startTime || new Date().toISOString(),
+            remainingTime: leaseStatus?.remainingTime || "",
+            services: deploymentDetails?.services || {}
+          };
+        } catch (error) {
+          console.error("Error fetching deployment details:", error);
+          // Continue with partial information if some calls fail
+        }
       }
 
       // Store deployment info
