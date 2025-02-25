@@ -9,10 +9,7 @@ if (!process.env.SPHERON_PRIVATE_KEY) {
 }
 
 // Initialize SDK with testnet network explicitly
-const sdk = new SpheronSDK({ 
-  privateKey: process.env.SPHERON_PRIVATE_KEY || "",
-  network: "testnet"
-});
+const sdk = new SpheronSDK("testnet", process.env.SPHERON_PRIVATE_KEY);
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Get USDT balance from escrow

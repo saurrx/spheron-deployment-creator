@@ -13,6 +13,11 @@ import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Upload, Server, AlertCircle } from "lucide-react";
 
+interface BalanceResponse {
+  lockedBalance: string;
+  unlockedBalance: string;
+}
+
 export default function Home() {
   const { toast } = useToast();
   const [balance, setBalance] = useState<string | null>(null);
@@ -26,7 +31,7 @@ export default function Home() {
     },
   });
 
-  const { data: escrowBalance } = useQuery({
+  const { data: escrowBalance } = useQuery<BalanceResponse>({
     queryKey: ["/api/balance"],
   });
 
@@ -69,7 +74,14 @@ export default function Home() {
           </CardHeader>
           <CardContent>
             {escrowBalance ? (
-              <p className="text-lg">Current USDT Balance: {escrowBalance} USDT</p>
+              <div className="space-y-2">
+                <p className="text-lg">
+                  Available Balance: {escrowBalance.unlockedBalance} USDT
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Locked in deployments: {escrowBalance.lockedBalance} USDT
+                </p>
+              </div>
             ) : (
               <Alert>
                 <AlertCircle className="h-4 w-4" />
