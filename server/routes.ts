@@ -3,13 +3,20 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { SpheronSDK } from "@spheron/protocol-sdk";
 import { insertDeploymentSchema } from "@shared/schema";
+import dotenv from "dotenv";
 
-if (!process.env.SPHERON_PRIVATE_KEY) {
+// Load environment variables
+dotenv.config();
+
+const PRIVATE_KEY = process.env.SPHERON_PRIVATE_KEY;
+const PROVIDER_PROXY_URL = "https://provider-proxy.spheron.network";
+
+if (!PRIVATE_KEY) {
   throw new Error("SPHERON_PRIVATE_KEY environment variable is required");
 }
 
 // Initialize SDK with testnet network explicitly
-const sdk = new SpheronSDK("testnet", process.env.SPHERON_PRIVATE_KEY);
+const sdk = new SpheronSDK("testnet", PRIVATE_KEY);
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Get USDT balance from escrow
@@ -29,14 +36,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Check balance first
       const balance = await sdk.escrow.getUserBalance("USDT");
-      if (!balance || parseFloat(balance) <= 0) {
+      if (!balance || parseFloat(balance.unlockedBalance) <= 0) {
         throw new Error("Insufficient USDT balance in escrow");
       }
 
       // Create deployment using SDK
       const deployment = await sdk.deployment.createDeployment(
         parsed.iclConfig,
-        parsed.providerUrl
+        PROVIDER_PROXY_URL
       );
 
       // Store deployment info without passing status
