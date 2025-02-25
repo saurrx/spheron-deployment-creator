@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Upload, Server, AlertCircle } from "lucide-react";
 
+// Keep the DEFAULT_ICL_CONFIG as is...
 const DEFAULT_ICL_CONFIG = `version: "1.0"
 
 services:
@@ -69,9 +70,31 @@ interface BalanceResponse {
   unlockedBalance: string;
 }
 
+interface DeploymentResponse {
+  deployment: {
+    id: number;
+    name: string;
+    status: string;
+  };
+  transaction: {
+    leaseId: string;
+  };
+  details: {
+    status: string;
+    forwarded_ports: Array<{
+      port: number;
+      as: number;
+    }>;
+  };
+  lease: {
+    status: string;
+    duration: string;
+  };
+}
+
 export default function Home() {
   const { toast } = useToast();
-  const [balance, setBalance] = useState<string | null>(null);
+  const [deploymentInfo, setDeploymentInfo] = useState<DeploymentResponse | null>(null);
 
   const form = useForm<InsertDeployment>({
     resolver: zodResolver(insertDeploymentSchema),
@@ -91,7 +114,8 @@ export default function Home() {
       const res = await apiRequest("POST", "/api/deployments", data);
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data: DeploymentResponse) => {
+      setDeploymentInfo(data);
       toast({
         title: "Deployment Created",
         description: "Your deployment has been created successfully",
@@ -147,6 +171,49 @@ export default function Home() {
             )}
           </CardContent>
         </Card>
+
+        {deploymentInfo && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Deployment Details</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div>
+                  <h3 className="font-medium">Basic Information</h3>
+                  <p>Name: {deploymentInfo.deployment.name}</p>
+                  <p>Status: {deploymentInfo.deployment.status}</p>
+                  <p>Lease ID: {deploymentInfo.transaction.leaseId}</p>
+                </div>
+
+                {deploymentInfo.details && (
+                  <div>
+                    <h3 className="font-medium">Deployment Status</h3>
+                    <p>Status: {deploymentInfo.details.status}</p>
+                    <div className="mt-2">
+                      <h4 className="font-medium">Forwarded Ports:</h4>
+                      <ul className="list-disc list-inside">
+                        {deploymentInfo.details.forwarded_ports?.map((port, idx) => (
+                          <li key={idx}>
+                            Port {port.port} as {port.as}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                )}
+
+                {deploymentInfo.lease && (
+                  <div>
+                    <h3 className="font-medium">Lease Information</h3>
+                    <p>Status: {deploymentInfo.lease.status}</p>
+                    <p>Duration: {deploymentInfo.lease.duration}</p>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardHeader>

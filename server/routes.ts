@@ -41,15 +41,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Create deployment using SDK
-      const deployment = await sdk.deployment.createDeployment(
+      const deploymentTxn = await sdk.deployment.createDeployment(
         parsed.iclConfig,
         PROVIDER_PROXY_URL
       );
 
-      // Store deployment info without passing status
+      // Fetch deployment details
+      let deploymentDetails = null;
+      let leaseDetails = null;
+
+      if (deploymentTxn.leaseId) {
+        deploymentDetails = await sdk.deployment.getDeployment(
+          deploymentTxn.leaseId,
+          PROVIDER_PROXY_URL
+        );
+        leaseDetails = await sdk.leases.getLeaseDetails(deploymentTxn.leaseId);
+      }
+
+      // Store deployment info
       const stored = await storage.createDeployment(parsed);
 
-      res.json(stored);
+      // Return comprehensive deployment information
+      res.json({
+        deployment: stored,
+        transaction: deploymentTxn,
+        details: deploymentDetails,
+        lease: leaseDetails
+      });
     } catch (error: any) {
       res.status(400).json({ message: error.message });
     }
