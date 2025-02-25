@@ -10,8 +10,8 @@ if (!process.env.SPHERON_PRIVATE_KEY) {
 
 // Initialize SDK with testnet network explicitly
 const sdk = new SpheronSDK({ 
-  network: "testnet",
-  privateKey: process.env.SPHERON_PRIVATE_KEY || ""
+  privateKey: process.env.SPHERON_PRIVATE_KEY || "",
+  network: "testnet"
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
