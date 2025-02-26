@@ -231,47 +231,51 @@ export default function Home() {
                       <p>Remaining time: {deploymentInfo.details.remainingTime}</p>
                     </div>
 
-                    <div>
-                      <h3 className="font-medium">Provider Details</h3>
-                      <p>Host URI: {deploymentInfo.details.providerDetails.hostUri}</p>
-                      <p>Status: {deploymentInfo.details.providerDetails.status}</p>
-                      <p>Trust Score: {deploymentInfo.details.providerDetails.trust}</p>
-                    </div>
+                    {deploymentInfo.details.providerDetails && (
+                      <div>
+                        <h3 className="font-medium">Provider Details</h3>
+                        <p>Host URI: {deploymentInfo.details.providerDetails.hostUri || 'Not available'}</p>
+                        <p>Status: {deploymentInfo.details.providerDetails.status || 'Unknown'}</p>
+                        <p>Trust Score: {deploymentInfo.details.providerDetails.trust || 'N/A'}</p>
+                      </div>
+                    )}
 
-                    <div>
-                      <h3 className="font-medium">Services</h3>
-                      {Object.entries(deploymentInfo.details.services || {}).map(([serviceName, service]) => (
-                        <div key={serviceName} className="mt-2 p-4 bg-muted rounded-lg">
-                          <h4 className="font-medium">{serviceName}</h4>
-                          <p>Available: {service.available}/{service.total}</p>
-                          <p>Ready replicas: {service.ready_replicas}/{service.replicas}</p>
+                    {deploymentInfo.details.services && Object.keys(deploymentInfo.details.services).length > 0 && (
+                      <div>
+                        <h3 className="font-medium">Services</h3>
+                        {Object.entries(deploymentInfo.details.services).map(([serviceName, service]) => (
+                          <div key={serviceName} className="mt-2 p-4 bg-muted rounded-lg">
+                            <h4 className="font-medium">{serviceName}</h4>
+                            <p>Available: {service.available}/{service.total}</p>
+                            <p>Ready replicas: {service.ready_replicas}/{service.replicas}</p>
 
-                          {service.uris && service.uris.length > 0 && (
-                            <p>URIs: {service.uris.join(', ')}</p>
-                          )}
+                            {service.uris && service.uris.length > 0 && (
+                              <p>URIs: {service.uris.join(', ')}</p>
+                            )}
 
-                          {service.container_statuses && service.container_statuses.length > 0 && (
-                            <div className="mt-2">
-                              <h5 className="font-medium">Container Statuses:</h5>
-                              {service.container_statuses.map((status, idx) => (
-                                <div key={idx} className="ml-4">
-                                  <p>{status.name}: {status.ready ? 'Ready' : 'Not ready'}</p>
-                                  {status.state.running && (
-                                    <p className="text-sm">Running since: {status.state.running.startedAt}</p>
-                                  )}
-                                  {status.state.terminated && (
-                                    <p className="text-sm">Terminated: {status.state.terminated.reason} (exit code {status.state.terminated.exitCode})</p>
-                                  )}
-                                  {status.state.waiting && (
-                                    <p className="text-sm">Waiting: {status.state.waiting.reason}</p>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
+                            {service.container_statuses && service.container_statuses.length > 0 && (
+                              <div className="mt-2">
+                                <h5 className="font-medium">Container Statuses:</h5>
+                                {service.container_statuses.map((status, idx) => (
+                                  <div key={idx} className="ml-4">
+                                    <p>{status.name}: {status.ready ? 'Ready' : 'Not ready'}</p>
+                                    {status.state.running && (
+                                      <p className="text-sm">Running since: {status.state.running.startedAt}</p>
+                                    )}
+                                    {status.state.terminated && (
+                                      <p className="text-sm">Terminated: {status.state.terminated.reason} (exit code {status.state.terminated.exitCode})</p>
+                                    )}
+                                    {status.state.waiting && (
+                                      <p className="text-sm">Waiting: {status.state.waiting.reason}</p>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
 
                     {deploymentInfo.details.forwarded_ports && 
                      Object.entries(deploymentInfo.details.forwarded_ports).length > 0 && (
