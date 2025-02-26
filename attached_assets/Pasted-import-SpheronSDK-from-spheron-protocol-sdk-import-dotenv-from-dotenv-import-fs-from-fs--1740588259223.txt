@@ -1,0 +1,161 @@
+import { SpheronSDK } from "@spheron/protocol-sdk";
+import dotenv from "dotenv";
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
+dotenv.config();
+
+const PRIVATE_KEY = process.env.PRIVATE_KEY;
+const WALLET_ADDRESS = process.env.WALLET_ADDRESS || "";
+const PROVIDER_PROXY_URL = process.env.PROVIDER_PROXY_URL || "http://localhost:3040";
+
+if (!PRIVATE_KEY) {
+    throw new Error("PRIVATE_KEY is not set in the environment variables");
+}
+
+if (!PROVIDER_PROXY_URL) {
+    throw new Error("PROVIDER_PROXY_URL is not set in the environment variables");
+}
+
+const sdk = new SpheronSDK("testnet", PRIVATE_KEY);
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+async function fetchDeploymentDetails(leaseId) {
+    try {
+        // Get lease details
+        console.log(`Fetching details for lease ID: ${leaseId}`);
+        
+        // Get basic lease information
+        const leaseDetails = await sdk.leases.getLeaseDetails(leaseId);
+        console.log("Lease Details:", JSON.stringify(leaseDetails, null, 2));
+        
+        // Extract important information
+        const { fizzId, providerAddress, tenantAddress, startTime, endTime, state } = leaseDetails;
+        
+        // Get order details from the lease ID
+        const orderDetails = await sdk.orders.getOrderDetails(leaseId);
+        console.log("Order Details:", JSON.stringify(orderDetails, null, 2));
+        
+        // Get provider details
+        const providerDetails = await sdk.provider.getProviderDetails(providerAddress);
+        console.log("Provider Details:", JSON.stringify(providerDetails, null, 2));
+        
+        // Extract provider host information
+        const { hostUri, certificate } = providerDetails;
+        
+        // Get deployment status and details through the deployment module
+        console.log("Fetching deployment details from provider...");
+        const deploymentDetails = await sdk.deployment.getDeployment(leaseId, PROVIDER_PROXY_URL);
+        console.log("Deployment Details:", JSON.stringify(deploymentDetails, null, 2));
+        
+        // Get deployment logs
+        console.log("Fetching deployment logs...");
+        const deploymentLogs = await sdk.deployment.getDeploymentLogs(leaseId, PROVIDER_PROXY_URL, {
+            tail: 100,  // Get last 100 log lines
+            startup: true  // Include startup logs
+        });
+        console.log(`Deployment Logs (${deploymentLogs.length} lines):`);
+        
+        // Create a summary object with all the important details
+        const summary = {
+            deployment: {
+                leaseId,
+                state,
+                fizzId,
+                providerAddress,
+                tenantAddress,
+                startTime: new Date(startTime * 1000).toISOString(),
+                endTime: new Date(endTime * 1000).toISOString(),
+                hostUri,
+                provider: {
+                    spec: providerDetails.spec,
+                    status: providerDetails.status,
+                    trust: providerDetails.trust
+                },
+                services: deploymentDetails.services,
+                forwarded_ports: deploymentDetails.forwarded_ports,
+                ips: deploymentDetails.ips
+            },
+            order: {
+                name: orderDetails.name,
+                token: orderDetails.token,
+                maxPrice: orderDetails.maxPrice,
+                numOfBlocks: orderDetails.numOfBlocks,
+                state: orderDetails.state
+            }
+        };
+        
+        // Save the summary to a file
+        fs.writeFileSync('deployment-summary.json', JSON.stringify(summary, null, 2));
+        console.log("Deployment summary saved to deployment-summary.json");
+        
+        return summary;
+    } catch (error) {
+        console.error("An error occurred fetching deployment details:", error);
+        if (error instanceof Error) {
+            console.error("Error message:", error.message);
+            console.error("Error stack:", error.stack);
+        }
+        throw error;
+    }
+}
+
+// Main function to run the script
+async function main() {
+    try {
+        // Check if lease ID was provided as command line argument
+        const leaseId = process.argv[2];
+        
+        if (!leaseId) {
+            console.error("Please provide a lease ID as a command line argument");
+            console.log("Usage: node fetch-deployment-details.js <lease-id>");
+            process.exit(1);
+        }
+        
+        const deploymentSummary = await fetchDeploymentDetails(leaseId);
+        console.log("Successfully retrieved deployment details");
+        
+        // Log the most important information
+        console.log("\n===== DEPLOYMENT SUMMARY =====");
+        console.log(`Lease ID: ${deploymentSummary.deployment.leaseId}`);
+        console.log(`State: ${deploymentSummary.deployment.state}`);
+        console.log(`Provider: ${deploymentSummary.deployment.hostUri}`);
+        
+        // Log services information
+        if (deploymentSummary.deployment.services) {
+            console.log("\nServices:");
+            for (const [serviceName, serviceDetails] of Object.entries(deploymentSummary.deployment.services)) {
+                console.log(`- ${serviceName}: ${serviceDetails.available}/${serviceDetails.total} available`);
+                if (serviceDetails.uris && serviceDetails.uris.length > 0) {
+                    console.log(`  URIs: ${serviceDetails.uris.join(', ')}`);
+                }
+            }
+        }
+        
+        // Log port forwarding information
+        if (deploymentSummary.deployment.forwarded_ports) {
+            console.log("\nPort Forwarding:");
+            for (const [service, ports] of Object.entries(deploymentSummary.deployment.forwarded_ports)) {
+                console.log(`- ${service}:`);
+                ports.forEach(port => {
+                    console.log(`  ${port.proto.toUpperCase()} ${port.host}:${port.externalPort} -> ${port.port} (${port.name})`);
+                });
+            }
+        }
+        
+    } catch (error) {
+        console.error("Script execution failed:", error);
+        process.exit(1);
+    }
+}
+
+// Run the script if it's executed directly
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+    main();
+} else {
+    // Export the function for use in other scripts
+    export { fetchDeploymentDetails };
+}

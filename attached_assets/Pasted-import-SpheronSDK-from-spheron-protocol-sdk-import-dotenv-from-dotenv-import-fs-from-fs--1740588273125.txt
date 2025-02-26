@@ -1,0 +1,170 @@
+import { SpheronSDK } from "@spheron/protocol-sdk";
+import dotenv from "dotenv";
+import fs from 'fs';
+
+// Load environment variables
+dotenv.config();
+
+const PRIVATE_KEY = process.env.PRIVATE_KEY;
+const PROVIDER_PROXY_URL = process.env.PROVIDER_PROXY_URL || "http://localhost:3040";
+
+if (!PRIVATE_KEY) {
+    throw new Error("PRIVATE_KEY is not set in the environment variables");
+}
+
+// Validate command line arguments
+if (process.argv.length < 3) {
+    console.error("Please provide a lease ID as an argument");
+    console.log("Usage: node deployment-info.js <lease-id>");
+    process.exit(1);
+}
+
+// Get lease ID from command line
+const leaseId = process.argv[2];
+
+// Initialize SDK
+const sdk = new SpheronSDK("testnet", PRIVATE_KEY);
+
+/**
+ * Main function to get deployment information
+ */
+async function getDeploymentInfo(leaseId) {
+    try {
+        console.log(`Getting information for deployment with lease ID: ${leaseId}`);
+        
+        // Step 1: Get basic lease details
+        const leaseDetails = await sdk.leases.getLeaseDetails(leaseId);
+        console.log("Lease details retrieved");
+        
+        // Step 2: Get provider details
+        const providerAddress = leaseDetails.providerAddress;
+        const providerDetails = await sdk.provider.getProviderDetails(providerAddress);
+        console.log("Provider details retrieved");
+        
+        // Step 3: Get deployment status from provider
+        const deploymentDetails = await sdk.deployment.getDeployment(leaseId, PROVIDER_PROXY_URL);
+        console.log("Deployment details retrieved from provider");
+        
+        // Step 4: Get order details
+        const orderDetails = await sdk.orders.getOrderDetails(leaseId);
+        console.log("Order details retrieved");
+        
+        // Create full details object
+        const fullDetails = {
+            lease: {
+                id: leaseId,
+                fizzId: leaseDetails.fizzId,
+                state: leaseDetails.state,
+                providerAddress: leaseDetails.providerAddress,
+                tenantAddress: leaseDetails.tenantAddress,
+                startTime: new Date(Number(leaseDetails.startTime) * 1000).toISOString(),
+                endTime: new Date(Number(leaseDetails.endTime) * 1000).toISOString()
+            },
+            provider: {
+                address: providerAddress,
+                hostUri: providerDetails.hostUri,
+                certificate: providerDetails.certificate,
+                spec: providerDetails.spec,
+                status: providerDetails.status,
+                trust: providerDetails.trust
+            },
+            deployment: deploymentDetails,
+            order: orderDetails
+        };
+        
+        // Print summary information
+        console.log("\n=== DEPLOYMENT SUMMARY ===");
+        console.log(`Lease ID: ${leaseId}`);
+        console.log(`State: ${leaseDetails.state}`);
+        console.log(`Provider: ${providerDetails.hostUri}`);
+        console.log(`Start time: ${fullDetails.lease.startTime}`);
+        console.log(`End time: ${fullDetails.lease.endTime}`);
+        
+        // Print services information
+        if (deploymentDetails.services) {
+            console.log("\n=== SERVICES ===");
+            for (const [name, service] of Object.entries(deploymentDetails.services)) {
+                console.log(`- ${name}:`);
+                console.log(`  Available: ${service.available}/${service.total}`);
+                console.log(`  Ready replicas: ${service.ready_replicas}/${service.replicas}`);
+                
+                if (service.uris && service.uris.length > 0) {
+                    console.log(`  URIs: ${service.uris.join(', ')}`);
+                }
+                
+                if (service.container_statuses && service.container_statuses.length > 0) {
+                    console.log("  Container statuses:");
+                    service.container_statuses.forEach(status => {
+                        console.log(`    - ${status.name}: ${status.ready ? 'Ready' : 'Not ready'}`);
+                        if (status.state.running) {
+                            console.log(`      Running since: ${status.state.running.startedAt}`);
+                        } else if (status.state.terminated) {
+                            console.log(`      Terminated: ${status.state.terminated.reason} (exit code ${status.state.terminated.exitCode})`);
+                        } else if (status.state.waiting) {
+                            console.log(`      Waiting: ${status.state.waiting.reason}`);
+                        }
+                    });
+                }
+            }
+        } else {
+            console.log("\nNo services information available");
+        }
+        
+        // Print port forwarding information
+        if (deploymentDetails.forwarded_ports) {
+            console.log("\n=== PORT FORWARDING ===");
+            for (const [service, ports] of Object.entries(deploymentDetails.forwarded_ports)) {
+                console.log(`- ${service}:`);
+                ports.forEach(port => {
+                    console.log(`  ${port.proto.toUpperCase()} ${port.host}:${port.externalPort} -> ${port.port} (${port.name})`);
+                });
+            }
+        } else {
+            console.log("\nNo port forwarding information available");
+        }
+        
+        // Print IPs information
+        if (deploymentDetails.ips && deploymentDetails.ips.length > 0) {
+            console.log("\n=== IPs ===");
+            deploymentDetails.ips.forEach(ip => {
+                console.log(`- ${ip}`);
+            });
+        }
+        
+        // Save full details to file
+        const filename = `deployment-${leaseId}-details.json`;
+        fs.writeFileSync(filename, JSON.stringify(fullDetails, null, 2));
+        console.log(`\nFull deployment details saved to ${filename}`);
+        
+        // Get deployment logs
+        console.log("\nFetching deployment logs...");
+        const logs = await sdk.deployment.getDeploymentLogs(leaseId, PROVIDER_PROXY_URL, {
+            tail: 100
+        });
+        
+        if (logs && logs.length > 0) {
+            const logsFilename = `deployment-${leaseId}-logs.txt`;
+            fs.writeFileSync(logsFilename, logs.join('\n'));
+            console.log(`Deployment logs saved to ${logsFilename}`);
+        } else {
+            console.log("No logs available");
+        }
+        
+        return fullDetails;
+    } catch (error) {
+        console.error("Error getting deployment info:", error);
+        if (error instanceof Error) {
+            console.error("Error message:", error.message);
+            console.error("Error stack:", error.stack);
+        }
+        throw error;
+    }
+}
+
+// Execute the main function
+getDeploymentInfo(leaseId)
+    .then(() => console.log("Done"))
+    .catch(error => {
+        console.error("Failed to get deployment info:", error);
+        process.exit(1);
+    });

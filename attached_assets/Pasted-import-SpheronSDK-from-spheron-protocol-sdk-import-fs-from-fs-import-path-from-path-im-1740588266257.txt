@@ -1,0 +1,391 @@
+import { SpheronSDK } from "@spheron/protocol-sdk";
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+/**
+ * A utility class for managing Spheron Protocol deployments
+ */
+export class SpheronDeploymentManager {
+    /**
+     * Create a new SpheronDeploymentManager instance
+     * 
+     * @param {string} privateKey - The private key for the wallet
+     * @param {string} providerProxyUrl - URL of the provider proxy server
+     * @param {string} networkType - Network type ('testnet' or 'mainnet')
+     */
+    constructor(privateKey, providerProxyUrl, networkType = 'testnet') {
+        if (!privateKey) {
+            throw new Error("Private key is required");
+        }
+        
+        if (!providerProxyUrl) {
+            throw new Error("Provider proxy URL is required");
+        }
+        
+        this.sdk = new SpheronSDK(networkType, privateKey);
+        this.providerProxyUrl = providerProxyUrl;
+    }
+    
+    /**
+     * Create a new deployment from YAML
+     * 
+     * @param {string} yamlPath - Path to the YAML file
+     * @returns {Promise<Object>} - Deployment transaction details
+     */
+    async createDeployment(yamlPath) {
+        try {
+            // Validate the YAML file path
+            if (!fs.existsSync(yamlPath)) {
+                throw new Error(`YAML file not found at ${yamlPath}`);
+            }
+            
+            // Read the YAML file
+            const iclYaml = fs.readFileSync(yamlPath, 'utf8');
+            
+            // Get wallet address
+            const walletAddress = await this._getWalletAddress();
+            console.log("Using wallet address:", walletAddress);
+            
+            // Check current balance
+            const currentBalance = await this.sdk.escrow.getUserBalance("USDT", walletAddress);
+            console.log("Current USDT balance:", currentBalance);
+            
+            // Create the deployment
+            console.log("Creating deployment...");
+            const deploymentTxn = await this.sdk.deployment.createDeployment(
+                iclYaml, 
+                this.providerProxyUrl
+            );
+            console.log("Deployment created:", deploymentTxn);
+            
+            return deploymentTxn;
+        } catch (error) {
+            console.error("Error creating deployment:", error);
+            throw error;
+        }
+    }
+    
+    /**
+     * Get details for an existing deployment
+     * 
+     * @param {string} leaseId - The lease ID of the deployment
+     * @returns {Promise<Object>} - Comprehensive deployment details
+     */
+    async getDeploymentDetails(leaseId) {
+        try {
+            if (!leaseId) {
+                throw new Error("Lease ID is required");
+            }
+            
+            console.log(`Fetching details for lease ID: ${leaseId}`);
+            
+            // Get lease details
+            const leaseDetails = await this.sdk.leases.getLeaseDetails(leaseId);
+            
+            // Get provider details
+            const providerDetails = await this.sdk.provider.getProviderDetails(
+                leaseDetails.providerAddress
+            );
+            
+            // Get deployment details from provider
+            const deploymentDetails = await this.sdk.deployment.getDeployment(
+                leaseId, 
+                this.providerProxyUrl
+            );
+            
+            // Get order details
+            const orderDetails = await this.sdk.orders.getOrderDetails(leaseId);
+            
+            // Compile all details into a single object
+            const details = {
+                leaseId,
+                leaseDetails,
+                providerDetails,
+                deploymentDetails,
+                orderDetails,
+                summary: {
+                    state: leaseDetails.state,
+                    provider: {
+                        address: leaseDetails.providerAddress,
+                        hostUri: providerDetails.hostUri,
+                    },
+                    services: deploymentDetails.services ? Object.keys(deploymentDetails.services) : [],
+                    ports: deploymentDetails.forwarded_ports || {},
+                    ips: deploymentDetails.ips || [],
+                    startTime: new Date(leaseDetails.startTime * 1000).toISOString(),
+                    endTime: new Date(leaseDetails.endTime * 1000).toISOString()
+                }
+            };
+            
+            return details;
+        } catch (error) {
+            console.error("Error fetching deployment details:", error);
+            throw error;
+        }
+    }
+    
+    /**
+     * Get logs for a deployment
+     * 
+     * @param {string} leaseId - The lease ID of the deployment
+     * @param {string} service - Optional service name to filter logs
+     * @param {number} tail - Number of log lines to retrieve
+     * @returns {Promise<string[]>} - Array of log lines
+     */
+    async getDeploymentLogs(leaseId, service = '', tail = 100) {
+        try {
+            if (!leaseId) {
+                throw new Error("Lease ID is required");
+            }
+            
+            console.log(`Fetching logs for lease ID: ${leaseId}${service ? ` service: ${service}` : ''}`);
+            
+            const logs = await this.sdk.deployment.getDeploymentLogs(
+                leaseId, 
+                this.providerProxyUrl,
+                { service, tail, startup: true }
+            );
+            
+            return logs;
+        } catch (error) {
+            console.error("Error fetching deployment logs:", error);
+            throw error;
+        }
+    }
+    
+    /**
+     * Monitor a deployment until it's ready or fails
+     * 
+     * @param {string} leaseId - The lease ID of the deployment
+     * @param {number} timeoutMs - Timeout in milliseconds
+     * @param {number} intervalMs - Polling interval in milliseconds
+     * @returns {Promise<Object>} - Final deployment status
+     */
+    async monitorDeployment(leaseId, timeoutMs = 300000, intervalMs = 5000) {
+        if (!leaseId) {
+            throw new Error("Lease ID is required");
+        }
+        
+        console.log(`Monitoring deployment with lease ID: ${leaseId}`);
+        
+        const startTime = Date.now();
+        let isReady = false;
+        let lastStatus = null;
+        
+        while (!isReady && (Date.now() - startTime) < timeoutMs) {
+            try {
+                // Get current deployment details
+                const deploymentDetails = await this.sdk.deployment.getDeployment(
+                    leaseId, 
+                    this.providerProxyUrl
+                );
+                
+                // Check if all services are ready
+                const services = deploymentDetails.services || {};
+                const serviceCount = Object.keys(services).length;
+                
+                if (serviceCount === 0) {
+                    console.log("No services found yet, waiting...");
+                } else {
+                    const readyServices = Object.values(services).filter(
+                        service => service.ready_replicas === service.replicas
+                    ).length;
+                    
+                    lastStatus = {
+                        ready: readyServices,
+                        total: serviceCount,
+                        services: Object.keys(services).map(name => ({
+                            name,
+                            ready: services[name].ready_replicas,
+                            total: services[name].replicas,
+                            available: services[name].available_replicas
+                        })),
+                        ports: deploymentDetails.forwarded_ports,
+                        ips: deploymentDetails.ips
+                    };
+                    
+                    console.log(`Deployment status: ${readyServices}/${serviceCount} services ready`);
+                    
+                    if (readyServices === serviceCount) {
+                        isReady = true;
+                        console.log("All services are ready!");
+                    }
+                }
+            } catch (error) {
+                console.warn("Error checking deployment status:", error.message);
+            }
+            
+            if (!isReady) {
+                await new Promise(resolve => setTimeout(resolve, intervalMs));
+            }
+        }
+        
+        if (!isReady) {
+            console.warn(`Deployment monitoring timed out after ${timeoutMs}ms`);
+        }
+        
+        // Get final deployment details
+        const finalDetails = await this.getDeploymentDetails(leaseId);
+        
+        return {
+            ready: isReady,
+            timedOut: !isReady,
+            lastStatus,
+            details: finalDetails
+        };
+    }
+    
+    /**
+     * Close a deployment
+     * 
+     * @param {string} leaseId - The lease ID of the deployment
+     * @returns {Promise<Object>} - Close operation result
+     */
+    async closeDeployment(leaseId) {
+        try {
+            if (!leaseId) {
+                throw new Error("Lease ID is required");
+            }
+            
+            console.log(`Closing deployment with lease ID: ${leaseId}`);
+            
+            const closeResult = await this.sdk.deployment.closeDeployment(leaseId);
+            console.log("Deployment closed:", closeResult);
+            
+            return closeResult;
+        } catch (error) {
+            console.error("Error closing deployment:", error);
+            throw error;
+        }
+    }
+    
+    /**
+     * Get the wallet address associated with the private key
+     * 
+     * @returns {Promise<string>} - Wallet address
+     * @private
+     */
+    async _getWalletAddress() {
+        try {
+            // Try to use SDK's internal methods first if available
+            if (this.sdk.walletAddress) {
+                return this.sdk.walletAddress;
+            }
+            
+            // Otherwise, check the escrow module for balance which will use the wallet address
+            const walletAddress = await this.sdk.escrow.getUserBalance("USDT");
+            return walletAddress.walletAddress;
+        } catch (error) {
+            console.error("Error getting wallet address:", error);
+            throw new Error("Could not determine wallet address");
+        }
+    }
+}
+
+// Example usage script
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+    import('dotenv').then(dotenv => {
+        dotenv.config();
+        
+        const PRIVATE_KEY = process.env.PRIVATE_KEY;
+        const PROVIDER_PROXY_URL = process.env.PROVIDER_PROXY_URL || "http://localhost:3040";
+        
+        if (!PRIVATE_KEY) {
+            console.error("PRIVATE_KEY is not set in the environment variables");
+            process.exit(1);
+        }
+        
+        // Parse command line arguments
+        const command = process.argv[2];
+        const arg = process.argv[3];
+        
+        const manager = new SpheronDeploymentManager(PRIVATE_KEY, PROVIDER_PROXY_URL);
+        
+        async function main() {
+            try {
+                switch(command) {
+                    case 'create':
+                        if (!arg) {
+                            console.error("Please provide a path to the YAML file");
+                            process.exit(1);
+                        }
+                        
+                        // Create a deployment
+                        const deploymentResult = await manager.createDeployment(arg);
+                        console.log("Deployment created:", deploymentResult);
+                        
+                        // Monitor the deployment until it's ready
+                        if (deploymentResult.leaseId) {
+                            console.log("Monitoring deployment...");
+                            const monitorResult = await manager.monitorDeployment(deploymentResult.leaseId);
+                            console.log("Deployment monitor result:", JSON.stringify(monitorResult.details.summary, null, 2));
+                        }
+                        break;
+                        
+                    case 'details':
+                        if (!arg) {
+                            console.error("Please provide a lease ID");
+                            process.exit(1);
+                        }
+                        
+                        // Get deployment details
+                        const details = await manager.getDeploymentDetails(arg);
+                        console.log(JSON.stringify(details.summary, null, 2));
+                        
+                        // Save full details to file
+                        const detailsPath = path.join(process.cwd(), `deployment-${arg}-details.json`);
+                        fs.writeFileSync(detailsPath, JSON.stringify(details, null, 2));
+                        console.log(`Full details saved to ${detailsPath}`);
+                        break;
+                        
+                    case 'logs':
+                        if (!arg) {
+                            console.error("Please provide a lease ID");
+                            process.exit(1);
+                        }
+                        
+                        // Get deployment logs
+                        const serviceName = process.argv[4] || '';
+                        const logs = await manager.getDeploymentLogs(arg, serviceName);
+                        
+                        // Display logs
+                        console.log(`Logs for deployment ${arg}${serviceName ? ` service ${serviceName}` : ''}:`);
+                        logs.forEach(log => console.log(log));
+                        
+                        // Save logs to file
+                        const logsPath = path.join(process.cwd(), `deployment-${arg}${serviceName ? `-${serviceName}` : ''}-logs.txt`);
+                        fs.writeFileSync(logsPath, logs.join('\n'));
+                        console.log(`Logs saved to ${logsPath}`);
+                        break;
+                        
+                    case 'close':
+                        if (!arg) {
+                            console.error("Please provide a lease ID");
+                            process.exit(1);
+                        }
+                        
+                        // Close deployment
+                        const closeResult = await manager.closeDeployment(arg);
+                        console.log("Deployment closed:", closeResult);
+                        break;
+                        
+                    default:
+                        console.error("Unknown command. Use: create, details, logs, or close");
+                        console.log("Examples:");
+                        console.log("  node spheron-deployment-manager.js create path/to/deployment.yaml");
+                        console.log("  node spheron-deployment-manager.js details lease-id");
+                        console.log("  node spheron-deployment-manager.js logs lease-id [service-name]");
+                        console.log("  node spheron-deployment-manager.js close lease-id");
+                        process.exit(1);
+                }
+            } catch (error) {
+                console.error("Error:", error);
+                process.exit(1);
+            }
+        }
+        
+        main();
+    });
+}
