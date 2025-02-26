@@ -92,6 +92,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Get lease status
           const leaseStatus = await sdk.leases.getLeaseStatusByLeaseId(deploymentTxn.leaseId);
 
+          // Get provider details
+          const providerDetails = await sdk.provider.getProviderDetails(leaseDetails.providerAddress);
+
+          // Get deployment logs
+          const deploymentLogs = await sdk.deployment.getDeploymentLogs(
+            deploymentTxn.leaseId,
+            PROVIDER_PROXY_URL,
+            { tail: 100, startup: true }
+          );
+
           // Combine all the details
           deploymentDetails = {
             ...deploymentDetails,
@@ -100,7 +110,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
             startTime: leaseStatus?.startTime || new Date().toISOString(),
             remainingTime: leaseStatus?.remainingTime || "",
             services: deploymentDetails?.services || {},
-            orderDetails: orderDetails // Added order details
+            orderDetails: orderDetails, // Added order details
+            providerDetails: {
+              hostUri: providerDetails.hostUri,
+              spec: providerDetails.spec,
+              status: providerDetails.status,
+              trust: providerDetails.trust
+            },
+            logs: deploymentLogs
           };
         } catch (error) {
           console.error("Error fetching deployment details:", error);

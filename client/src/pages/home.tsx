@@ -86,20 +86,39 @@ interface DeploymentResponse {
     startTime: string;
     remainingTime: string;
     forwarded_ports: {
-      port: number;
-      as: number;
-      protocol?: string;
-    }[] | null | undefined;
+      [key: string]: Array<{
+        port: number;
+        externalPort: number;
+        proto: string;
+        name: string;
+        host: string;
+      }>;
+    };
     services: {
       [key: string]: {
-        urls: string[];
-        ports: string[];
-        replicas: string;
-        hostUri: string;
-        region: string;
-        ips: string[];
+        available: string;
+        total: string;
+        ready_replicas: number;
+        replicas: number;
+        uris?: string[];
+        container_statuses?: Array<{
+          name: string;
+          ready: boolean;
+          state: {
+            running?: { startedAt: string };
+            terminated?: { reason: string; exitCode: number };
+            waiting?: { reason: string };
+          };
+        }>;
       };
     };
+    providerDetails: {
+      hostUri: string;
+      spec: any;
+      status: string;
+      trust: number;
+    };
+    logs: string[];
   };
   lease: {
     status: string;
@@ -213,47 +232,74 @@ export default function Home() {
                     </div>
 
                     <div>
+                      <h3 className="font-medium">Provider Details</h3>
+                      <p>Host URI: {deploymentInfo.details.providerDetails.hostUri}</p>
+                      <p>Status: {deploymentInfo.details.providerDetails.status}</p>
+                      <p>Trust Score: {deploymentInfo.details.providerDetails.trust}</p>
+                    </div>
+
+                    <div>
                       <h3 className="font-medium">Services</h3>
                       {Object.entries(deploymentInfo.details.services || {}).map(([serviceName, service]) => (
                         <div key={serviceName} className="mt-2 p-4 bg-muted rounded-lg">
                           <h4 className="font-medium">{serviceName}</h4>
-                          {service.urls.length > 0 && (
-                            <p>URLs: {service.urls.join(', ')}</p>
+                          <p>Available: {service.available}/{service.total}</p>
+                          <p>Ready replicas: {service.ready_replicas}/{service.replicas}</p>
+
+                          {service.uris && service.uris.length > 0 && (
+                            <p>URIs: {service.uris.join(', ')}</p>
                           )}
-                          {service.ports.length > 0 && (
-                            <div>
-                              <p className="font-medium mb-1">Ports:</p>
-                              <ul className="list-disc list-inside">
-                                {service.ports.map((port, idx) => (
-                                  <li key={idx}>{port}</li>
-                                ))}
-                              </ul>
+
+                          {service.container_statuses && service.container_statuses.length > 0 && (
+                            <div className="mt-2">
+                              <h5 className="font-medium">Container Statuses:</h5>
+                              {service.container_statuses.map((status, idx) => (
+                                <div key={idx} className="ml-4">
+                                  <p>{status.name}: {status.ready ? 'Ready' : 'Not ready'}</p>
+                                  {status.state.running && (
+                                    <p className="text-sm">Running since: {status.state.running.startedAt}</p>
+                                  )}
+                                  {status.state.terminated && (
+                                    <p className="text-sm">Terminated: {status.state.terminated.reason} (exit code {status.state.terminated.exitCode})</p>
+                                  )}
+                                  {status.state.waiting && (
+                                    <p className="text-sm">Waiting: {status.state.waiting.reason}</p>
+                                  )}
+                                </div>
+                              ))}
                             </div>
-                          )}
-                          <p>Replicas: {service.replicas}</p>
-                          <p>Host URI: {service.hostUri}</p>
-                          <p>Region: {service.region}</p>
-                          {service.ips.length > 0 && (
-                            <p>IPs: {service.ips.join(', ')}</p>
                           )}
                         </div>
                       ))}
                     </div>
 
-                    {Array.isArray(deploymentInfo.details.forwarded_ports) &&
-                      deploymentInfo.details.forwarded_ports.length > 0 && (
-                        <div>
-                          <h3 className="font-medium">Forwarded Ports</h3>
-                          <ul className="list-disc list-inside">
-                            {deploymentInfo.details.forwarded_ports.map((port, idx) => (
-                              <li key={idx}>
-                                {port.protocol ? `${port.protocol}: ` : ""}
-                                Port {port.port} as {port.as}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
+                    {deploymentInfo.details.forwarded_ports && 
+                     Object.entries(deploymentInfo.details.forwarded_ports).length > 0 && (
+                      <div>
+                        <h3 className="font-medium">Forwarded Ports</h3>
+                        {Object.entries(deploymentInfo.details.forwarded_ports).map(([service, ports]) => (
+                          <div key={service} className="mt-2">
+                            <h4 className="font-medium">{service}:</h4>
+                            <ul className="list-disc list-inside">
+                              {ports.map((port, idx) => (
+                                <li key={idx}>
+                                  {port.proto.toUpperCase()} {port.host}:{port.externalPort} &rarr; {port.port} ({port.name})
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {deploymentInfo.details.logs && deploymentInfo.details.logs.length > 0 && (
+                      <div>
+                        <h3 className="font-medium">Deployment Logs</h3>
+                        <pre className="mt-2 p-4 bg-muted rounded-lg overflow-x-auto">
+                          {deploymentInfo.details.logs.join('\n')}
+                        </pre>
+                      </div>
+                    )}
                   </>
                 )}
 
