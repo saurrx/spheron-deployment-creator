@@ -8,15 +8,28 @@ import dotenv from "dotenv";
 // Load environment variables
 dotenv.config();
 
-const PRIVATE_KEY = process.env.SPHERON_PRIVATE_KEY;
-const PROVIDER_PROXY_URL = "https://provider-proxy.spheron.network";
+// Environment variables
+const SPHERON_PRIVATE_KEY = process.env.SPHERON_PRIVATE_KEY;
+const PROVIDER_PROXY_URL = process.env.PROVIDER_PROXY_URL || "https://provider-proxy.spheron.network";
+const NETWORK = process.env.SPHERON_NETWORK || "testnet";
 
-if (!PRIVATE_KEY) {
-  throw new Error("SPHERON_PRIVATE_KEY environment variable is required");
+// Validate required environment variables
+function validateEnvironment() {
+  const required = [
+    { key: 'SPHERON_PRIVATE_KEY', value: SPHERON_PRIVATE_KEY },
+  ];
+
+  const missing = required
+    .filter(({ value }) => !value)
+    .map(({ key }) => key);
+
+  if (missing.length > 0) {
+    throw new Error(
+      `Missing required environment variables: ${missing.join(', ')}\n` +
+      'Please check your .env file or environment configuration.'
+    );
+  }
 }
-
-// Initialize SDK with testnet network explicitly
-const sdk = new SpheronSDK("testnet", PRIVATE_KEY);
 
 // Helper function to safely convert bigint to string in objects
 function sanitizeResponse(obj: any): any {
@@ -44,13 +57,23 @@ function sanitizeResponse(obj: any): any {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Validate environment before starting the server
+  validateEnvironment();
+
+  // Initialize SDK with configured network
+  const sdk = new SpheronSDK(NETWORK, SPHERON_PRIVATE_KEY!);
+
   // Get CST balance from escrow
   app.get("/api/balance", async (req, res) => {
     try {
       const balance = await sdk.escrow.getUserBalance("CST");
       res.json(sanitizeResponse(balance));
     } catch (error: any) {
-      res.status(500).json({ message: error.message });
+      console.error('Error fetching balance:', error);
+      res.status(500).json({ 
+        message: "Failed to fetch balance",
+        error: error.message 
+      });
     }
   });
 
@@ -71,7 +94,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         PROVIDER_PROXY_URL
       );
 
-      // Fetch deployment details
+      // Initialize deployment details
       let deploymentDetails = null;
       let leaseDetails = null;
 
@@ -83,24 +106,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
             PROVIDER_PROXY_URL
           );
 
-          // Get order details
-          const orderDetails = await sdk.orders.getOrderDetails(deploymentTxn.leaseId);
+          // Get additional deployment information
+          const [orderDetails, leaseInfo, leaseStatus, providerDetails, deploymentLogs] = await Promise.all([
+            sdk.orders.getOrderDetails(deploymentTxn.leaseId),
+            sdk.leases.getLeaseDetails(deploymentTxn.leaseId),
+            sdk.leases.getLeaseStatusByLeaseId(deploymentTxn.leaseId),
+            sdk.provider.getProviderDetails(leaseInfo.providerAddress),
+            sdk.deployment.getDeploymentLogs(
+              deploymentTxn.leaseId,
+              PROVIDER_PROXY_URL,
+              { tail: 100, startup: true }
+            )
+          ]);
 
-          // Get lease details
-          leaseDetails = await sdk.leases.getLeaseDetails(deploymentTxn.leaseId);
-
-          // Get lease status
-          const leaseStatus = await sdk.leases.getLeaseStatusByLeaseId(deploymentTxn.leaseId);
-
-          // Get provider details
-          const providerDetails = await sdk.provider.getProviderDetails(leaseDetails.providerAddress);
-
-          // Get deployment logs
-          const deploymentLogs = await sdk.deployment.getDeploymentLogs(
-            deploymentTxn.leaseId,
-            PROVIDER_PROXY_URL,
-            { tail: 100, startup: true }
-          );
+          // Update lease details
+          leaseDetails = leaseInfo;
 
           // Combine all the details
           deploymentDetails = {
@@ -110,7 +130,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             startTime: leaseStatus?.startTime || new Date().toISOString(),
             remainingTime: leaseStatus?.remainingTime || "",
             services: deploymentDetails?.services || {},
-            orderDetails: orderDetails, // Added order details
+            orderDetails,
             providerDetails: {
               hostUri: providerDetails.hostUri,
               spec: providerDetails.spec,
@@ -136,7 +156,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         lease: leaseDetails
       }));
     } catch (error: any) {
-      res.status(400).json({ message: error.message });
+      console.error('Error creating deployment:', error);
+      res.status(400).json({ 
+        message: "Failed to create deployment",
+        error: error.message 
+      });
     }
   });
 
