@@ -5,7 +5,9 @@ import { SpheronSDK } from "@spheron/protocol-sdk";
 import { insertDeploymentSchema } from "@shared/schema";
 import dotenv from "dotenv";
 
-// Load environment variables
+/**
+ * Load and validate environment configuration
+ */
 dotenv.config();
 
 // Environment variables
@@ -13,7 +15,10 @@ const SPHERON_PRIVATE_KEY = process.env.SPHERON_PRIVATE_KEY;
 const PROVIDER_PROXY_URL = process.env.PROVIDER_PROXY_URL || "https://provider-proxy.spheron.network";
 const NETWORK = process.env.SPHERON_NETWORK || "testnet";
 
-// Validate required environment variables
+/**
+ * Validates required environment variables are present
+ * @throws {Error} If any required environment variables are missing
+ */
 function validateEnvironment() {
   const required = [
     { key: 'SPHERON_PRIVATE_KEY', value: SPHERON_PRIVATE_KEY },
@@ -31,7 +36,11 @@ function validateEnvironment() {
   }
 }
 
-// Helper function to safely convert bigint to string in objects
+/**
+ * Safely converts BigInt values to strings in API responses
+ * @param obj - Object potentially containing BigInt values
+ * @returns Object with BigInt values converted to strings
+ */
 function sanitizeResponse(obj: any): any {
   if (obj === null || obj === undefined) {
     return obj;
@@ -56,6 +65,11 @@ function sanitizeResponse(obj: any): any {
   return obj;
 }
 
+/**
+ * Registers API routes for the Spheron deployment application
+ * @param app - Express application instance
+ * @returns HTTP server instance
+ */
 export async function registerRoutes(app: Express): Promise<Server> {
   // Validate environment before starting the server
   validateEnvironment();
@@ -63,7 +77,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Initialize SDK with configured network
   const sdk = new SpheronSDK(NETWORK, SPHERON_PRIVATE_KEY!);
 
-  // Get CST balance from escrow
+  /**
+   * GET /api/balance
+   * Returns the current CST balance from escrow
+   */
   app.get("/api/balance", async (req, res) => {
     try {
       const balance = await sdk.escrow.getUserBalance("CST");
@@ -77,7 +94,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Create new deployment
+  /**
+   * POST /api/deployments
+   * Creates a new deployment with the provided configuration
+   * Validates CST balance before proceeding
+   * Returns comprehensive deployment information including transaction and lease details
+   */
   app.post("/api/deployments", async (req, res) => {
     try {
       const parsed = insertDeploymentSchema.parse(req.body);
