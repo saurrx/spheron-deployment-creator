@@ -88,9 +88,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(sanitizeResponse(balance));
     } catch (error: any) {
       console.error('Error fetching balance:', error);
-      res.status(500).json({ 
+      res.status(500).json({
         message: "Failed to fetch balance",
-        error: error.message 
+        error: error.message
       });
     }
   });
@@ -106,9 +106,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const parsed = insertDeploymentSchema.parse(req.body);
 
       // Check balance first
-      const balance = await sdk.escrow.getUserBalance("CST");
-      if (!balance || parseFloat(balance.unlockedBalance) <= 0) {
-        throw new Error("Insufficient CST balance in escrow");
+      const walletAddress = "0x355A9b118Fd7f4b15A30572039316b362A0E5d8a";
+      const balance = await sdk.escrow.getUserBalance("CST", walletAddress);
+      const unlockedTokens = Number(balance.unlockedBalance) / 1e6;
+
+      if (!balance || unlockedTokens < 1.0) {
+        throw new Error(`Insufficient CST balance in escrow. Available: ${unlockedTokens.toFixed(6)} CST`);
       }
 
       // Create deployment using SDK
@@ -129,60 +132,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
             PROVIDER_PROXY_URL
           );
 
-          // Get additional deployment information
-          const [orderDetails, leaseInfo, leaseStatus, providerDetails, deploymentLogs] = await Promise.all([
-            sdk.orders.getOrderDetails(deploymentTxn.leaseId),
-            sdk.leases.getLeaseDetails(deploymentTxn.leaseId),
-            sdk.leases.getLeaseStatusByLeaseId(deploymentTxn.leaseId),
-            sdk.provider.getProviderDetails(leaseInfo.providerAddress),
-            sdk.deployment.getDeploymentLogs(
-              deploymentTxn.leaseId,
-              PROVIDER_PROXY_URL,
-              { tail: 100, startup: true }
-            )
-          ]);
+          // Store deployment info
+          const stored = await storage.createDeployment(parsed);
 
-          // Update lease details
-          leaseDetails = leaseInfo;
-
-          // Combine all the details
-          deploymentDetails = {
-            ...deploymentDetails,
-            provider: leaseStatus?.provider || "",
-            pricePerHour: leaseStatus?.pricePerHour?.toString() || "0",
-            startTime: leaseStatus?.startTime || new Date().toISOString(),
-            remainingTime: leaseStatus?.remainingTime || "",
-            services: deploymentDetails?.services || {},
-            orderDetails,
-            providerDetails: {
-              hostUri: providerDetails.hostUri,
-              spec: providerDetails.spec,
-              status: providerDetails.status,
-              trust: providerDetails.trust
-            },
-            logs: deploymentLogs
-          };
+          // Return comprehensive deployment information with sanitized values
+          res.json(sanitizeResponse({
+            deployment: stored,
+            transaction: deploymentTxn,
+            details: deploymentDetails,
+            lease: leaseDetails
+          }));
         } catch (error) {
           console.error("Error fetching deployment details:", error);
-          // Continue with partial information if some calls fail
+          // Return partial information if some calls fail
+          res.json(sanitizeResponse({
+            deployment: await storage.createDeployment(parsed),
+            transaction: deploymentTxn
+          }));
         }
       }
-
-      // Store deployment info
-      const stored = await storage.createDeployment(parsed);
-
-      // Return comprehensive deployment information with sanitized values
-      res.json(sanitizeResponse({
-        deployment: stored,
-        transaction: deploymentTxn,
-        details: deploymentDetails,
-        lease: leaseDetails
-      }));
     } catch (error: any) {
       console.error('Error creating deployment:', error);
-      res.status(400).json({ 
+      res.status(400).json({
         message: "Failed to create deployment",
-        error: error.message 
+        error: error.message
       });
     }
   });
