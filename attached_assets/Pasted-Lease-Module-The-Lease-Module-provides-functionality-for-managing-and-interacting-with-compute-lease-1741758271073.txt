@@ -1,0 +1,109 @@
+Lease Module
+The Lease Module provides functionality for managing and interacting with compute leases.
+
+1. getLeaseDetails
+Retrieves detailed information about a specific lease.
+
+const leaseId = 'your-lease-id';
+
+const leaseDetails = await sdk.leases.getLeaseDetails(leaseId);
+console.log('Lease details:', leaseDetails);
+Parameters:
+leaseId (string): Lease ID to retrieve details for.
+Returns:
+Promise<object>: An object containing the details of the lease:
+leaseId (string): The ID of the lease.
+fizzId (string): The ID of the associated Fizz node.
+requestId (string): The ID of the request associated with this lease.
+resourceAttribute (object): Details about the resources allocated:
+cpuUnits (number): Number of CPU units.
+cpuAttributes (array): Additional CPU attributes.
+ramUnits (number): Amount of RAM allocated.
+ramAttributes (array): Additional RAM attributes.
+gpuUnits (number): Number of GPU units.
+gpuAttributes (array): Additional GPU attributes.
+endpointsKind (number): Type of endpoints.
+endpointsSequenceNumber (number): Sequence number for endpoints.
+acceptedPrice (string): The accepted price for the lease.
+providerAddress (string): The address of the provider.
+tenantAddress (string): The address of the tenant.
+startBlock (string): The block number when the lease started.
+startTime (number): The timestamp when the lease started.
+endTime (number): The timestamp when the lease ended (0 if still active).
+state (string): The current state of the lease (e.g., 'active').
+2. getLeaseIds
+Retrieves active, terminated, and all lease IDs for a given address.
+
+const walletAddress = '0xYourWalletAddress';
+
+const { activeLeaseIds, terminatedLeaseIds, allLeaseIds } = await sdk.leases.getLeaseIds(
+  walletAddress
+);
+
+console.log('Active Leases:', activeLeaseIds);
+console.log('Terminated Leases:', terminatedLeaseIds);
+console.log('All Leases:', allLeaseIds);
+Parameters:
+walletAddress (string): Address to retrieve lease IDs for.
+Returns:
+Promise<object>: An object containing arrays of lease IDs:
+activeLeaseIds (string[]): Active lease IDs.
+terminatedLeaseIds (string[]): Terminated lease IDs.
+allLeaseIds (string[]): All lease IDs.
+3. getLeasesByState
+Retrieves leases filtered by state (ACTIVE or TERMINATED) with pagination support.
+
+const walletAddress = '0xYourWalletAddress';
+const options = {
+  state: 'ACTIVE',
+  page: 1,
+  pageSize: 10,
+};
+
+const leases = await sdk.leases.getLeasesByState(walletAddress, options);
+console.log('Leases:', leases);
+Parameters:
+walletAddress (string): Address to retrieve leases for.
+options (object, optional):
+state (string): State of the leases to retrieve (ACTIVE or TERMINATED).
+page (number): Page number for pagination.
+pageSize (number): Number of items per page.
+Returns:
+Promise<object>: An object containing:
+leases (LeaseWithOrderDetails[]): An array of lease objects with additional order details:
+All properties from the lease object
+name (string): The name of the order
+`tier (string): The tier of the order
+region (string | undefined): The region of the provider or Fizz node
+token (object): Token details
+symbol (string | undefined): The symbol of the token
+decimal (number | undefined): The number of decimal places for the token
+activeCount (number): The number of active leases
+terminatedCount (number): The number of terminated leases
+totalCount (number): The total number of leases
+4. closeLease
+Closes an active lease. You can do it using closeDeployment method of deployment module as well. Both of them are idempotent.
+
+const leaseId = 'your-lease-id';
+
+const closeLeaseReceipt = await sdk.leases.closeLease(leaseId);
+console.log('Lease closed:', closeLeaseReceipt);
+Parameters:
+leaseId (string): Lease ID to close.
+Returns:
+Promise<object>: Transaction receipt of the close operation.
+5. listenToLeaseClosedEvent
+Sets up a listener for the LeaseClosed event.
+
+sdk.leases.listenToLeaseClosedEvent(
+  ({ orderId, providerAddress, tenantAddress }) => {
+    console.log('Lease closed:', orderId);
+  },
+  () => {
+    console.error('Listening failed or timed out');
+  },
+  60000 // Timeout in milliseconds
+);
+Parameters:
+onSuccessCallback (function): Function called when a LeaseClosed event is detected.
+onFailureCallback (function): Function called if listening fails or times out.
