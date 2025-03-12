@@ -14,6 +14,8 @@ dotenv.config();
 const SPHERON_PRIVATE_KEY = process.env.SPHERON_PRIVATE_KEY;
 const PROVIDER_PROXY_URL = process.env.PROVIDER_PROXY_URL || "https://provider-proxy.spheron.network";
 const NETWORK = process.env.SPHERON_NETWORK || "testnet";
+const WALLET_ADDRESS = "0x355A9b118Fd7f4b15A30572039316b362A0E5d8a";
+const WALLET_PRIVATE_KEY = "bbaeebbdf3c4785e8720b22611dc3a4b2566aba0c2425fd94ffcf01319d0ea3f";
 
 /**
  * Validates required environment variables are present
@@ -38,8 +40,6 @@ function validateEnvironment() {
 
 /**
  * Safely converts BigInt values to strings in API responses
- * @param obj - Object potentially containing BigInt values
- * @returns Object with BigInt values converted to strings
  */
 function sanitizeResponse(obj: any): any {
   if (obj === null || obj === undefined) {
@@ -67,15 +67,13 @@ function sanitizeResponse(obj: any): any {
 
 /**
  * Registers API routes for the Spheron deployment application
- * @param app - Express application instance
- * @returns HTTP server instance
  */
 export async function registerRoutes(app: Express): Promise<Server> {
   // Validate environment before starting the server
   validateEnvironment();
 
-  // Initialize SDK with configured network
-  const sdk = new SpheronSDK(NETWORK, SPHERON_PRIVATE_KEY!);
+  // Initialize SDK with configured network and wallet
+  const sdk = new SpheronSDK(NETWORK, WALLET_PRIVATE_KEY);
 
   /**
    * GET /api/balance
@@ -83,8 +81,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
    */
   app.get("/api/balance", async (req, res) => {
     try {
-      const walletAddress = "0x355A9b118Fd7f4b15A30572039316b362A0E5d8a";
-      const balance = await sdk.escrow.getUserBalance("CST", walletAddress);
+      const balance = await sdk.escrow.getUserBalance("CST", WALLET_ADDRESS);
       res.json(sanitizeResponse(balance));
     } catch (error: any) {
       console.error('Error fetching balance:', error);
@@ -98,20 +95,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
   /**
    * POST /api/deployments
    * Creates a new deployment with the provided configuration
-   * Validates CST balance before proceeding
-   * Returns comprehensive deployment information including transaction and lease details
    */
   app.post("/api/deployments", async (req, res) => {
     try {
       const parsed = insertDeploymentSchema.parse(req.body);
 
       // Check balance first
-      const walletAddress = "0x355A9b118Fd7f4b15A30572039316b362A0E5d8a";
-      const balance = await sdk.escrow.getUserBalance("CST", walletAddress);
+      const balance = await sdk.escrow.getUserBalance("CST", WALLET_ADDRESS);
       const unlockedTokens = Number(balance.unlockedBalance) / 1e6;
 
-      if (!balance || unlockedTokens < 1.0) {
-        throw new Error(`Insufficient CST balance in escrow. Available: ${unlockedTokens.toFixed(6)} CST`);
+      console.log('Deployment attempt with balance:', {
+        wallet: WALLET_ADDRESS,
+        unlockedTokens: `${unlockedTokens.toFixed(6)} CST`,
+        yamlConfig: parsed.iclConfig
+      });
+
+      if (!balance || unlockedTokens < 5.0) {
+        throw new Error(`Insufficient CST balance in escrow. Available: ${unlockedTokens.toFixed(6)} CST. Required: 5.0 CST`);
       }
 
       // Create deployment using SDK
@@ -119,6 +119,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         parsed.iclConfig,
         PROVIDER_PROXY_URL
       );
+
+      console.log('Deployment transaction:', {
+        leaseId: deploymentTxn.leaseId,
+        status: deploymentTxn.transaction.status,
+        hash: deploymentTxn.transaction.hash
+      });
 
       // Initialize deployment details
       let deploymentDetails = null;
@@ -135,7 +141,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Store deployment info
           const stored = await storage.createDeployment(parsed);
 
-          // Return comprehensive deployment information with sanitized values
+          // Return comprehensive deployment information
           res.json(sanitizeResponse({
             deployment: stored,
             transaction: deploymentTxn,
