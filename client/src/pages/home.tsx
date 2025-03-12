@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Upload, Server, AlertCircle, RefreshCw } from "lucide-react";
+import { Upload, Server, AlertCircle, RefreshCw, X } from "lucide-react";
 import { WalletStatus } from "@/components/ui/wallet-status";
 import { cn } from "@/lib/utils";
 
@@ -118,7 +118,7 @@ export default function Home() {
   const form = useForm<InsertDeployment>({
     resolver: zodResolver(insertDeploymentSchema),
     defaultValues: {
-      name: "ollama-deployment",
+      name: "jupyter-deployment",
       iclConfig: DEFAULT_ICL_CONFIG,
       providerUrl: "https://provider-proxy.spheron.network",
     },
@@ -154,11 +154,6 @@ export default function Home() {
         title: "Deployment Created",
         description: "Your deployment has been created successfully. Fetching deployment details...",
       });
-      form.reset({
-        name: "ollama-deployment",
-        iclConfig: DEFAULT_ICL_CONFIG,
-        providerUrl: "https://provider-proxy.spheron.network",
-      });
     },
     onError: (error) => {
       toast({
@@ -193,6 +188,26 @@ export default function Home() {
     },
   });
 
+  const closeDeploymentMutation = useMutation({
+    mutationFn: async (leaseId: string) => {
+      const res = await apiRequest("POST", `/api/deployments/${leaseId}/close`);
+      return res.json();
+    },
+    onSuccess: () => {
+      setDeploymentInfo(null);
+      toast({
+        title: "Deployment Closed",
+        description: "Your deployment has been successfully closed.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
 
   const onSubmit = (data: InsertDeployment) => {
     deployMutation.mutate(data);
@@ -245,19 +260,31 @@ export default function Home() {
             <Card className="border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>Deployment Details</CardTitle>
-                <Button 
-                  variant="outline"
-                  size="sm"
-                  onClick={() => refreshDeploymentMutation.mutate(deploymentInfo.transaction.leaseId)}
-                  disabled={refreshDeploymentMutation.isPending}
-                  className="border-2 border-black"
-                >
-                  <RefreshCw className={cn(
-                    "mr-2 h-4 w-4",
-                    refreshDeploymentMutation.isPending && "animate-spin"
-                  )} />
-                  Refresh Details
-                </Button>
+                <div className="flex gap-2">
+                  <Button 
+                    variant="outline"
+                    size="sm"
+                    onClick={() => refreshDeploymentMutation.mutate(deploymentInfo.transaction.leaseId)}
+                    disabled={refreshDeploymentMutation.isPending}
+                    className="border-2 border-black"
+                  >
+                    <RefreshCw className={cn(
+                      "mr-2 h-4 w-4",
+                      refreshDeploymentMutation.isPending && "animate-spin"
+                    )} />
+                    Refresh Details
+                  </Button>
+                  <Button 
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => closeDeploymentMutation.mutate(deploymentInfo.transaction.leaseId)}
+                    disabled={closeDeploymentMutation.isPending}
+                    className="border-2 border-black"
+                  >
+                    <X className="mr-2 h-4 w-4" />
+                    Close Deployment
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="space-y-6">
@@ -329,61 +356,63 @@ export default function Home() {
             </Card>
           )}
 
-          <Card className="border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-2xl font-black">
-                <Upload className="h-6 w-6" />
-                Create Deployment
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                  <FormField
-                    control={form.control}
-                    name="name"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="font-bold">Deployment Name</FormLabel>
-                        <FormControl>
-                          <Input
-                            placeholder="my-deployment"
-                            {...field}
-                            className="border-2 border-black focus-visible:ring-4 ring-primary/20"
-                          />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
+          {!deploymentInfo && (
+            <Card className="border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-2xl font-black">
+                  <Upload className="h-6 w-6" />
+                  Create Deployment
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Form {...form}>
+                  <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                    <FormField
+                      control={form.control}
+                      name="name"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="font-bold">Deployment Name</FormLabel>
+                          <FormControl>
+                            <Input
+                              placeholder="my-deployment"
+                              {...field}
+                              className="border-2 border-black focus-visible:ring-4 ring-primary/20"
+                            />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
 
-                  <FormField
-                    control={form.control}
-                    name="iclConfig"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="font-bold">ICL Configuration (YAML)</FormLabel>
-                        <FormControl>
-                          <Textarea
-                            placeholder="version: '1.0'..."
-                            className="font-mono border-2 border-black min-h-[300px] focus-visible:ring-4 ring-primary/20"
-                            {...field}
-                          />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
+                    <FormField
+                      control={form.control}
+                      name="iclConfig"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="font-bold">ICL Configuration (YAML)</FormLabel>
+                          <FormControl>
+                            <Textarea
+                              placeholder="version: '1.0'..."
+                              className="font-mono border-2 border-black min-h-[300px] focus-visible:ring-4 ring-primary/20"
+                              {...field}
+                            />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
 
-                  <Button
-                    type="submit"
-                    disabled={deployMutation.isPending}
-                    className="w-full border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all"
-                  >
-                    {deployMutation.isPending ? "Creating Deployment..." : "Create Deployment"}
-                  </Button>
-                </form>
-              </Form>
-            </CardContent>
-          </Card>
+                    <Button
+                      type="submit"
+                      disabled={deployMutation.isPending}
+                      className="w-full border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all"
+                    >
+                      {deployMutation.isPending ? "Creating Deployment..." : "Create Deployment"}
+                    </Button>
+                  </form>
+                </Form>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
 

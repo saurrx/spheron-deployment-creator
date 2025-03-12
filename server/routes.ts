@@ -19,7 +19,6 @@ const WALLET_PRIVATE_KEY = "bbaeebbdf3c4785e8720b22611dc3a4b2566aba0c2425fd94ffc
 
 /**
  * Validates required environment variables are present
- * @throws {Error} If any required environment variables are missing
  */
 function validateEnvironment() {
   const required = [
@@ -128,7 +127,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Initialize deployment details
       let deploymentDetails = null;
-      let leaseDetails = null;
 
       if (deploymentTxn.leaseId) {
         try {
@@ -145,8 +143,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           res.json(sanitizeResponse({
             deployment: stored,
             transaction: deploymentTxn,
-            details: deploymentDetails,
-            lease: leaseDetails
+            details: deploymentDetails
           }));
         } catch (error) {
           console.error("Error fetching deployment details:", error);
@@ -187,6 +184,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Error fetching deployment details:', error);
       res.status(400).json({
         message: "Failed to fetch deployment details",
+        error: error.message
+      });
+    }
+  });
+
+  /**
+   * POST /api/deployments/:leaseId/close
+   * Closes an existing deployment
+   */
+  app.post("/api/deployments/:leaseId/close", async (req, res) => {
+    try {
+      const leaseId = req.params.leaseId;
+      if (!leaseId) {
+        throw new Error("Lease ID is required");
+      }
+
+      const closeResult = await sdk.deployment.closeDeployment(leaseId);
+      res.json(sanitizeResponse(closeResult));
+    } catch (error: any) {
+      console.error('Error closing deployment:', error);
+      res.status(400).json({
+        message: "Failed to close deployment",
         error: error.message
       });
     }
