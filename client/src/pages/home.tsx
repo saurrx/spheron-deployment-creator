@@ -79,26 +79,15 @@ interface DeploymentResponse {
   };
   transaction: {
     leaseId: string;
+    status: number;
+    hash: string;
   };
   details: {
     status: string;
-    provider: string;
-    pricePerHour: string;
-    startTime: string;
-    remainingTime: string;
-    forwarded_ports: {
-      [key: string]: Array<{
-        port: number;
-        externalPort: number;
-        proto: string;
-        name: string;
-        host: string;
-      }>;
-    };
     services: {
       [key: string]: {
-        available: string;
-        total: string;
+        available: number;
+        total: number;
         ready_replicas: number;
         replicas: number;
         uris?: string[];
@@ -113,17 +102,15 @@ interface DeploymentResponse {
         }>;
       };
     };
-    providerDetails: {
-      hostUri: string;
-      spec: any;
-      status: string;
-      trust: number;
+    forwarded_ports: {
+      [key: string]: Array<{
+        port: number;
+        externalPort: number;
+        proto: string;
+        name: string;
+        host: string;
+      }>;
     };
-    logs: string[];
-  };
-  lease: {
-    status: string;
-    duration: string;
   };
 }
 
@@ -245,64 +232,29 @@ export default function Home() {
                     <p>Name: {deploymentInfo.deployment.name}</p>
                     <p>Status: {deploymentInfo.deployment.status}</p>
                     <p>Lease ID: {deploymentInfo.transaction.leaseId}</p>
+                    <p>Transaction Hash: {deploymentInfo.transaction.hash}</p>
                   </div>
 
                   {deploymentInfo.details && (
                     <>
                       <div>
                         <h3 className="font-medium">Deployment Status</h3>
-                        <p>Status: {deploymentInfo.details.status}</p>
-                        <p>Provider: {deploymentInfo.details.provider}</p>
-                        <p>Price per hour: {deploymentInfo.details.pricePerHour} CST</p>
-                        <p>Start time: {new Date(deploymentInfo.details.startTime).toLocaleString()}</p>
-                        <p>Remaining time: {deploymentInfo.details.remainingTime}</p>
+                        <p>Status: {deploymentInfo.details.status || 'Pending'}</p>
+                        {deploymentInfo.details.services && Object.entries(deploymentInfo.details.services).map(([serviceName, service]) => (
+                          <div key={serviceName}>
+                            <p>Service: {serviceName}</p>
+                            <p>Ready: {service.ready_replicas}/{service.replicas} replicas</p>
+                            {service.container_statuses?.map((status, idx) => (
+                              <div key={idx}>
+                                {status.state.running && (
+                                  <p>Started: {new Date(status.state.running.startedAt).toLocaleString()}</p>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        ))}
                       </div>
 
-                      {deploymentInfo.details.providerDetails && (
-                        <div>
-                          <h3 className="font-medium">Provider Details</h3>
-                          <p>Host URI: {deploymentInfo.details.providerDetails.hostUri || 'Not available'}</p>
-                          <p>Status: {deploymentInfo.details.providerDetails.status || 'Unknown'}</p>
-                          <p>Trust Score: {deploymentInfo.details.providerDetails.trust || 'N/A'}</p>
-                        </div>
-                      )}
-
-                      {deploymentInfo.details.services && Object.keys(deploymentInfo.details.services).length > 0 && (
-                        <div>
-                          <h3 className="font-medium">Services</h3>
-                          {Object.entries(deploymentInfo.details.services).map(([serviceName, service]) => (
-                            <div key={serviceName} className="mt-2 p-4 bg-muted rounded-lg">
-                              <h4 className="font-medium">{serviceName}</h4>
-                              <p>Available: {service.available}/{service.total}</p>
-                              <p>Ready replicas: {service.ready_replicas}/{service.replicas}</p>
-
-                              {service.uris && service.uris.length > 0 && (
-                                <p>URIs: {service.uris.join(', ')}</p>
-                              )}
-
-                              {service.container_statuses && service.container_statuses.length > 0 && (
-                                <div className="mt-2">
-                                  <h5 className="font-medium">Container Statuses:</h5>
-                                  {service.container_statuses.map((status, idx) => (
-                                    <div key={idx} className="ml-4">
-                                      <p>{status.name}: {status.ready ? 'Ready' : 'Not ready'}</p>
-                                      {status.state.running && (
-                                        <p className="text-sm">Running since: {status.state.running.startedAt}</p>
-                                      )}
-                                      {status.state.terminated && (
-                                        <p className="text-sm">Terminated: {status.state.terminated.reason} (exit code {status.state.terminated.exitCode})</p>
-                                      )}
-                                      {status.state.waiting && (
-                                        <p className="text-sm">Waiting: {status.state.waiting.reason}</p>
-                                      )}
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      )}
 
                       {deploymentInfo.details.forwarded_ports &&
                         Object.entries(deploymentInfo.details.forwarded_ports).length > 0 && (
@@ -322,24 +274,7 @@ export default function Home() {
                             ))}
                           </div>
                         )}
-
-                      {deploymentInfo.details.logs && deploymentInfo.details.logs.length > 0 && (
-                        <div>
-                          <h3 className="font-medium">Deployment Logs</h3>
-                          <pre className="mt-2 p-4 bg-muted rounded-lg overflow-x-auto">
-                            {deploymentInfo.details.logs.join('\n')}
-                          </pre>
-                        </div>
-                      )}
                     </>
-                  )}
-
-                  {deploymentInfo.lease && (
-                    <div>
-                      <h3 className="font-medium">Lease Information</h3>
-                      <p>Status: {deploymentInfo.lease.status}</p>
-                      <p>Duration: {deploymentInfo.lease.duration}</p>
-                    </div>
                   )}
                 </div>
               </CardContent>
