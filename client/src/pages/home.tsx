@@ -143,10 +143,13 @@ export default function Home() {
     queryKey: ["/api/balance"],
   });
 
-  // Format balance with proper decimals
+  // Format balance with proper decimals and add thousand separators
   const formatBalance = (rawBalance: string) => {
     const balanceInCST = Number(rawBalance) / 1e6;
-    return balanceInCST.toFixed(6);
+    return new Intl.NumberFormat('en-US', {
+      minimumFractionDigits: 6,
+      maximumFractionDigits: 6
+    }).format(balanceInCST);
   };
 
   const deployMutation = useMutation({
