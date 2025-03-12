@@ -13,7 +13,6 @@ import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Upload, Server, AlertCircle } from "lucide-react";
 
-// Keep the DEFAULT_ICL_CONFIG as is...
 const DEFAULT_ICL_CONFIG = `version: "1.0"
 
 services:
@@ -54,11 +53,12 @@ profiles:
                 - model: rtx4090
   placement:
     westcoast:
+      attributes:
+        region: us-west
       pricing:
         ollama-test:
           token: CST
           amount: 5
-
 deployment:
   ollama-test:
     westcoast:
