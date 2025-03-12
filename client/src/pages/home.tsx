@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Upload, Server, AlertCircle } from "lucide-react";
+import { WalletStatus } from "@/components/ui/wallet-status";
 
 const DEFAULT_ICL_CONFIG = `version: "1.0"
 
@@ -129,6 +130,7 @@ interface DeploymentResponse {
 export default function Home() {
   const { toast } = useToast();
   const [deploymentInfo, setDeploymentInfo] = useState<DeploymentResponse | null>(null);
+  const [isWalletLoading, setIsWalletLoading] = useState(true);
 
   const form = useForm<InsertDeployment>({
     resolver: zodResolver(insertDeploymentSchema),
@@ -139,9 +141,17 @@ export default function Home() {
     },
   });
 
-  const { data: escrowBalance } = useQuery<BalanceResponse>({
+  const { data: escrowBalance, isLoading: isBalanceLoading } = useQuery<BalanceResponse>({
     queryKey: ["/api/balance"],
   });
+
+  // Simulate wallet connection check
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsWalletLoading(false);
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Format balance with proper decimals and add thousand separators
   const formatBalance = (rawBalance: string) => {
@@ -182,9 +192,18 @@ export default function Home() {
     deployMutation.mutate(data);
   };
 
+  const walletAddress = "0x355A9b118Fd7f4b15A30572039316b362A0E5d8a";
+
   return (
     <div className="container mx-auto py-10 px-4">
-      <h1 className="text-4xl font-bold mb-8">Spheron Protocol SDK example</h1>
+      <div className="flex justify-between items-center mb-8">
+        <h1 className="text-4xl font-bold">Spheron Protocol SDK example</h1>
+        <WalletStatus
+          isConnected={!isBalanceLoading && !!escrowBalance}
+          isLoading={isWalletLoading || isBalanceLoading}
+          address={walletAddress}
+        />
+      </div>
 
       <div className="grid gap-6">
         <Card>
@@ -286,7 +305,7 @@ export default function Home() {
                       </div>
                     )}
 
-                    {deploymentInfo.details.forwarded_ports && 
+                    {deploymentInfo.details.forwarded_ports &&
                      Object.entries(deploymentInfo.details.forwarded_ports).length > 0 && (
                       <div>
                         <h3 className="font-medium">Forwarded Ports</h3>
