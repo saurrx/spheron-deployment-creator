@@ -145,7 +145,6 @@ export default function Home() {
     queryKey: ["/api/balance"],
   });
 
-  // Simulate wallet connection check
   useEffect(() => {
     const timer = setTimeout(() => {
       setIsWalletLoading(false);
@@ -153,7 +152,6 @@ export default function Home() {
     return () => clearTimeout(timer);
   }, []);
 
-  // Format balance with proper decimals and add thousand separators
   const formatBalance = (rawBalance: string) => {
     const balanceInCST = Number(rawBalance) / 1e6;
     return new Intl.NumberFormat('en-US', {
@@ -195,211 +193,227 @@ export default function Home() {
   const walletAddress = "0x355A9b118Fd7f4b15A30572039316b362A0E5d8a";
 
   return (
-    <div className="container mx-auto py-10 px-4">
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-4xl font-bold">Spheron Protocol SDK example</h1>
-        <WalletStatus
-          isConnected={!isBalanceLoading && !!escrowBalance}
-          isLoading={isWalletLoading || isBalanceLoading}
-          address={walletAddress}
-        />
-      </div>
+    <div className="min-h-screen flex flex-col">
+      <div className="container mx-auto py-10 px-4 flex-grow">
+        <div className="flex justify-between items-center mb-8 border-4 border-black p-6 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
+          <h1 className="text-4xl font-black">Spheron Protocol SDK example</h1>
+          <WalletStatus
+            isConnected={!isBalanceLoading && !!escrowBalance}
+            isLoading={isWalletLoading || isBalanceLoading}
+            address={walletAddress}
+          />
+        </div>
 
-      <div className="grid gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Server className="h-5 w-5" />
-              Balance Status
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {escrowBalance ? (
-              <div className="space-y-2">
-                <p className="text-lg">
-                  Available Balance: {formatBalance(escrowBalance.unlockedBalance)} CST
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  Locked in deployments: {formatBalance(escrowBalance.lockedBalance)} CST
-                </p>
-              </div>
-            ) : (
-              <Alert>
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>
-                  Unable to fetch balance. Please ensure you have sufficient CST funds.
-                </AlertDescription>
-              </Alert>
-            )}
-          </CardContent>
-        </Card>
-
-        {deploymentInfo && (
-          <Card>
+        <div className="grid gap-8">
+          <Card className="border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
             <CardHeader>
-              <CardTitle>Deployment Details</CardTitle>
+              <CardTitle className="flex items-center gap-2 text-2xl font-black">
+                <Server className="h-6 w-6" />
+                Balance Status
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                <div>
-                  <h3 className="font-medium">Basic Information</h3>
-                  <p>Name: {deploymentInfo.deployment.name}</p>
-                  <p>Status: {deploymentInfo.deployment.status}</p>
-                  <p>Lease ID: {deploymentInfo.transaction.leaseId}</p>
+              {escrowBalance ? (
+                <div className="space-y-2">
+                  <p className="text-xl font-bold">
+                    Available Balance: {formatBalance(escrowBalance.unlockedBalance)} CST
+                  </p>
+                  <p className="text-lg text-muted-foreground">
+                    Locked in deployments: {formatBalance(escrowBalance.lockedBalance)} CST
+                  </p>
                 </div>
-
-                {deploymentInfo.details && (
-                  <>
-                    <div>
-                      <h3 className="font-medium">Deployment Status</h3>
-                      <p>Status: {deploymentInfo.details.status}</p>
-                      <p>Provider: {deploymentInfo.details.provider}</p>
-                      <p>Price per hour: {deploymentInfo.details.pricePerHour} CST</p>
-                      <p>Start time: {new Date(deploymentInfo.details.startTime).toLocaleString()}</p>
-                      <p>Remaining time: {deploymentInfo.details.remainingTime}</p>
-                    </div>
-
-                    {deploymentInfo.details.providerDetails && (
-                      <div>
-                        <h3 className="font-medium">Provider Details</h3>
-                        <p>Host URI: {deploymentInfo.details.providerDetails.hostUri || 'Not available'}</p>
-                        <p>Status: {deploymentInfo.details.providerDetails.status || 'Unknown'}</p>
-                        <p>Trust Score: {deploymentInfo.details.providerDetails.trust || 'N/A'}</p>
-                      </div>
-                    )}
-
-                    {deploymentInfo.details.services && Object.keys(deploymentInfo.details.services).length > 0 && (
-                      <div>
-                        <h3 className="font-medium">Services</h3>
-                        {Object.entries(deploymentInfo.details.services).map(([serviceName, service]) => (
-                          <div key={serviceName} className="mt-2 p-4 bg-muted rounded-lg">
-                            <h4 className="font-medium">{serviceName}</h4>
-                            <p>Available: {service.available}/{service.total}</p>
-                            <p>Ready replicas: {service.ready_replicas}/{service.replicas}</p>
-
-                            {service.uris && service.uris.length > 0 && (
-                              <p>URIs: {service.uris.join(', ')}</p>
-                            )}
-
-                            {service.container_statuses && service.container_statuses.length > 0 && (
-                              <div className="mt-2">
-                                <h5 className="font-medium">Container Statuses:</h5>
-                                {service.container_statuses.map((status, idx) => (
-                                  <div key={idx} className="ml-4">
-                                    <p>{status.name}: {status.ready ? 'Ready' : 'Not ready'}</p>
-                                    {status.state.running && (
-                                      <p className="text-sm">Running since: {status.state.running.startedAt}</p>
-                                    )}
-                                    {status.state.terminated && (
-                                      <p className="text-sm">Terminated: {status.state.terminated.reason} (exit code {status.state.terminated.exitCode})</p>
-                                    )}
-                                    {status.state.waiting && (
-                                      <p className="text-sm">Waiting: {status.state.waiting.reason}</p>
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {deploymentInfo.details.forwarded_ports &&
-                     Object.entries(deploymentInfo.details.forwarded_ports).length > 0 && (
-                      <div>
-                        <h3 className="font-medium">Forwarded Ports</h3>
-                        {Object.entries(deploymentInfo.details.forwarded_ports).map(([service, ports]) => (
-                          <div key={service} className="mt-2">
-                            <h4 className="font-medium">{service}:</h4>
-                            <ul className="list-disc list-inside">
-                              {ports.map((port, idx) => (
-                                <li key={idx}>
-                                  {port.proto.toUpperCase()} {port.host}:{port.externalPort} &rarr; {port.port} ({port.name})
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {deploymentInfo.details.logs && deploymentInfo.details.logs.length > 0 && (
-                      <div>
-                        <h3 className="font-medium">Deployment Logs</h3>
-                        <pre className="mt-2 p-4 bg-muted rounded-lg overflow-x-auto">
-                          {deploymentInfo.details.logs.join('\n')}
-                        </pre>
-                      </div>
-                    )}
-                  </>
-                )}
-
-                {deploymentInfo.lease && (
-                  <div>
-                    <h3 className="font-medium">Lease Information</h3>
-                    <p>Status: {deploymentInfo.lease.status}</p>
-                    <p>Duration: {deploymentInfo.lease.duration}</p>
-                  </div>
-                )}
-              </div>
+              ) : (
+                <Alert>
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    Unable to fetch balance. Please ensure you have sufficient CST funds.
+                  </AlertDescription>
+                </Alert>
+              )}
             </CardContent>
           </Card>
-        )}
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Upload className="h-5 w-5" />
-              Create Deployment
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                <FormField
-                  control={form.control}
-                  name="name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Deployment Name</FormLabel>
-                      <FormControl>
-                        <Input placeholder="my-deployment" {...field} />
-                      </FormControl>
-                    </FormItem>
+          {deploymentInfo && (
+            <Card className="border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
+              <CardHeader>
+                <CardTitle>Deployment Details</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div>
+                    <h3 className="font-medium">Basic Information</h3>
+                    <p>Name: {deploymentInfo.deployment.name}</p>
+                    <p>Status: {deploymentInfo.deployment.status}</p>
+                    <p>Lease ID: {deploymentInfo.transaction.leaseId}</p>
+                  </div>
+
+                  {deploymentInfo.details && (
+                    <>
+                      <div>
+                        <h3 className="font-medium">Deployment Status</h3>
+                        <p>Status: {deploymentInfo.details.status}</p>
+                        <p>Provider: {deploymentInfo.details.provider}</p>
+                        <p>Price per hour: {deploymentInfo.details.pricePerHour} CST</p>
+                        <p>Start time: {new Date(deploymentInfo.details.startTime).toLocaleString()}</p>
+                        <p>Remaining time: {deploymentInfo.details.remainingTime}</p>
+                      </div>
+
+                      {deploymentInfo.details.providerDetails && (
+                        <div>
+                          <h3 className="font-medium">Provider Details</h3>
+                          <p>Host URI: {deploymentInfo.details.providerDetails.hostUri || 'Not available'}</p>
+                          <p>Status: {deploymentInfo.details.providerDetails.status || 'Unknown'}</p>
+                          <p>Trust Score: {deploymentInfo.details.providerDetails.trust || 'N/A'}</p>
+                        </div>
+                      )}
+
+                      {deploymentInfo.details.services && Object.keys(deploymentInfo.details.services).length > 0 && (
+                        <div>
+                          <h3 className="font-medium">Services</h3>
+                          {Object.entries(deploymentInfo.details.services).map(([serviceName, service]) => (
+                            <div key={serviceName} className="mt-2 p-4 bg-muted rounded-lg">
+                              <h4 className="font-medium">{serviceName}</h4>
+                              <p>Available: {service.available}/{service.total}</p>
+                              <p>Ready replicas: {service.ready_replicas}/{service.replicas}</p>
+
+                              {service.uris && service.uris.length > 0 && (
+                                <p>URIs: {service.uris.join(', ')}</p>
+                              )}
+
+                              {service.container_statuses && service.container_statuses.length > 0 && (
+                                <div className="mt-2">
+                                  <h5 className="font-medium">Container Statuses:</h5>
+                                  {service.container_statuses.map((status, idx) => (
+                                    <div key={idx} className="ml-4">
+                                      <p>{status.name}: {status.ready ? 'Ready' : 'Not ready'}</p>
+                                      {status.state.running && (
+                                        <p className="text-sm">Running since: {status.state.running.startedAt}</p>
+                                      )}
+                                      {status.state.terminated && (
+                                        <p className="text-sm">Terminated: {status.state.terminated.reason} (exit code {status.state.terminated.exitCode})</p>
+                                      )}
+                                      {status.state.waiting && (
+                                        <p className="text-sm">Waiting: {status.state.waiting.reason}</p>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {deploymentInfo.details.forwarded_ports &&
+                        Object.entries(deploymentInfo.details.forwarded_ports).length > 0 && (
+                          <div>
+                            <h3 className="font-medium">Forwarded Ports</h3>
+                            {Object.entries(deploymentInfo.details.forwarded_ports).map(([service, ports]) => (
+                              <div key={service} className="mt-2">
+                                <h4 className="font-medium">{service}:</h4>
+                                <ul className="list-disc list-inside">
+                                  {ports.map((port, idx) => (
+                                    <li key={idx}>
+                                      {port.proto.toUpperCase()} {port.host}:{port.externalPort} &rarr; {port.port} ({port.name})
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                      {deploymentInfo.details.logs && deploymentInfo.details.logs.length > 0 && (
+                        <div>
+                          <h3 className="font-medium">Deployment Logs</h3>
+                          <pre className="mt-2 p-4 bg-muted rounded-lg overflow-x-auto">
+                            {deploymentInfo.details.logs.join('\n')}
+                          </pre>
+                        </div>
+                      )}
+                    </>
                   )}
-                />
 
-                <FormField
-                  control={form.control}
-                  name="iclConfig"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>ICL Configuration (YAML)</FormLabel>
-                      <FormControl>
-                        <Textarea
-                          placeholder="version: '1.0'..."
-                          className="font-mono"
-                          rows={10}
-                          {...field}
-                        />
-                      </FormControl>
-                    </FormItem>
+                  {deploymentInfo.lease && (
+                    <div>
+                      <h3 className="font-medium">Lease Information</h3>
+                      <p>Status: {deploymentInfo.lease.status}</p>
+                      <p>Duration: {deploymentInfo.lease.duration}</p>
+                    </div>
                   )}
-                />
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
-                <Button
-                  type="submit"
-                  disabled={deployMutation.isPending}
-                  className="w-full"
-                >
-                  {deployMutation.isPending ? "Creating Deployment..." : "Create Deployment"}
-                </Button>
-              </form>
-            </Form>
-          </CardContent>
-        </Card>
+          <Card className="border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-2xl font-black">
+                <Upload className="h-6 w-6" />
+                Create Deployment
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Form {...form}>
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                  <FormField
+                    control={form.control}
+                    name="name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="font-bold">Deployment Name</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="my-deployment"
+                            {...field}
+                            className="border-2 border-black focus-visible:ring-4 ring-primary/20"
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="iclConfig"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="font-bold">ICL Configuration (YAML)</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            placeholder="version: '1.0'..."
+                            className="font-mono border-2 border-black min-h-[300px] focus-visible:ring-4 ring-primary/20"
+                            {...field}
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+
+                  <Button
+                    type="submit"
+                    disabled={deployMutation.isPending}
+                    className="w-full border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all"
+                  >
+                    {deployMutation.isPending ? "Creating Deployment..." : "Create Deployment"}
+                  </Button>
+                </form>
+              </Form>
+            </CardContent>
+          </Card>
+        </div>
       </div>
+
+      <footer className="border-t-4 border-black py-6 mt-12">
+        <div className="container mx-auto px-4 text-center">
+          <p className="font-black text-lg flex items-center justify-center gap-2">
+            Powered by
+            <span className="text-primary hover:underline cursor-pointer transition-colors">
+              Spheron
+            </span>
+          </p>
+        </div>
+      </footer>
     </div>
   );
 }
