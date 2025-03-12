@@ -4,9 +4,10 @@ A Node.js application for managing blockchain deployments using the Spheron Prot
 
 ## Features
 
-- Express.js backend with comprehensive error handling
-- Spheron Protocol SDK integration for blockchain deployments
-- Real-time deployment status monitoring
+- Express.js backend with robust balance checking
+- React frontend with dynamic wallet integration
+- Spheron Protocol SDK for blockchain interactions
+- Real-time deployment status and wallet balance monitoring
 - Advanced deployment configuration management
 - Secure environment variable handling
 - Support for CST token balance management
@@ -16,8 +17,8 @@ A Node.js application for managing blockchain deployments using the Spheron Prot
 
 - Node.js (v18 or higher)
 - npm (v8 or higher)
-- A Spheron account with API access
-- CST tokens in your wallet for deployments
+- A wallet with CST tokens for deployments
+- Wallet private key and address
 
 ## Installation
 
@@ -34,7 +35,7 @@ npm install
 
 3. Configure environment variables:
    - Copy `.env.example` to `.env`
-   - Fill in your configuration:
+   - Fill in your wallet configuration:
 
 ```bash
 cp .env.example .env
@@ -44,11 +45,10 @@ cp .env.example .env
 
 | Variable | Description | Default | Required |
 |----------|-------------|---------|----------|
-| SPHERON_PRIVATE_KEY | Your Spheron private key | - | Yes |
-| SPHERON_NETWORK | Network to use (testnet/mainnet) | testnet | No |
-| PROVIDER_PROXY_URL | Provider proxy URL | https://provider-proxy.spheron.network | No |
 | WALLET_ADDRESS | Your wallet address | - | Yes |
 | WALLET_PRIVATE_KEY | Your wallet private key | - | Yes |
+| SPHERON_NETWORK | Network to use (testnet/mainnet) | testnet | No |
+| PROVIDER_PROXY_URL | Provider proxy URL | https://provider-proxy.spheron.network | No |
 
 ## Running the Application
 
@@ -61,6 +61,108 @@ The server will start on port 5000.
 2. Access the application:
 - Open your browser and navigate to `http://localhost:5000`
 - You should see the deployment creator interface
+
+## API Endpoints
+
+### 1. Get CST Balance
+
+```http
+GET /api/balance
+```
+
+Returns the current CST balance from your wallet.
+
+#### Response
+```json
+{
+  "lockedBalance": "string",
+  "unlockedBalance": "string"
+}
+```
+
+### 2. Create Deployment
+
+```http
+POST /api/deployments
+```
+
+Creates a new deployment using the provided configuration.
+
+#### Request Body
+```json
+{
+  "name": "string",
+  "iclConfig": "string" // YAML configuration
+}
+```
+
+#### Response
+```json
+{
+  "deployment": {
+    "name": "string",
+    "status": "string"
+  },
+  "transaction": {
+    "leaseId": "string",
+    "status": "number",
+    "hash": "string"
+  },
+  "details": {
+    "services": {},
+    "forwarded_ports": {},
+    "status": "string"
+  }
+}
+```
+
+### 3. Get Deployment Details
+
+```http
+GET /api/deployments/:leaseId
+```
+
+Retrieves the details of an existing deployment based on the provided Lease ID.
+
+#### Parameters
+- `leaseId` (Required): The unique identifier of the deployment lease
+
+#### Response
+```json
+{
+  "services": {
+    "service-name": {
+      "available": "number",
+      "total": "number",
+      "uris": ["string"],
+      "ready_replicas": "number",
+      "replicas": "number",
+      "container_statuses": [
+        {
+          "name": "string",
+          "ready": "boolean",
+          "state": {
+            "running": { "startedAt": "string" },
+            "waiting": { "reason": "string" }
+          }
+        }
+      ]
+    }
+  },
+  "forwarded_ports": {
+    "service-name": [
+      {
+        "port": "number",
+        "externalPort": "number",
+        "proto": "string",
+        "name": "string",
+        "host": "string"
+      }
+    ]
+  },
+  "status": "string"
+}
+```
 
 ## Usage Guide
 
@@ -123,60 +225,6 @@ After creating a deployment, you can monitor:
 - Forwarded ports
 - Resource usage
 - Deployment logs
-
-## API Endpoints
-
-### Get CST Balance
-
-```http
-GET /api/balance
-```
-
-Returns the current CST balance from your Spheron escrow account.
-
-#### Response
-```json
-{
-  "lockedBalance": "string",
-  "unlockedBalance": "string"
-}
-```
-
-### Create Deployment
-
-```http
-POST /api/deployments
-```
-
-Creates a new deployment using the provided configuration.
-
-#### Request Body
-```json
-{
-  "name": "string",
-  "iclConfig": "string" // YAML configuration
-}
-```
-
-#### Response
-```json
-{
-  "deployment": {
-    "name": "string",
-    "status": "string"
-  },
-  "transaction": {
-    "leaseId": "string",
-    "status": "number",
-    "hash": "string"
-  },
-  "details": {
-    "services": {},
-    "forwarded_ports": {},
-    "status": "string"
-  }
-}
-```
 
 ## Error Handling
 

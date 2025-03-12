@@ -166,6 +166,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  /**
+   * GET /api/deployments/:leaseId
+   * Returns details about a specific deployment
+   */
+  app.get("/api/deployments/:leaseId", async (req, res) => {
+    try {
+      const leaseId = req.params.leaseId;
+      if (!leaseId) {
+        throw new Error("Lease ID is required");
+      }
+
+      const deploymentDetails = await sdk.deployment.getDeployment(
+        leaseId,
+        PROVIDER_PROXY_URL
+      );
+
+      res.json(sanitizeResponse(deploymentDetails));
+    } catch (error: any) {
+      console.error('Error fetching deployment details:', error);
+      res.status(400).json({
+        message: "Failed to fetch deployment details",
+        error: error.message
+      });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
