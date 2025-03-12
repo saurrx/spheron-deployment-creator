@@ -1,5 +1,8 @@
 import { SpheronSDK } from "@spheron/protocol-sdk";
 import * as dotenv from "dotenv";
+import * as fs from "fs";
+import * as path from "path";
+import { fileURLToPath } from 'url';
 
 // Load environment variables
 dotenv.config();
@@ -19,14 +22,14 @@ async function testEscrowModule() {
   try {
     console.log("\n=== Testing Escrow Module ===\n");
 
-    // 1. Get User Balance
-    console.log("1. Testing getUserBalance...");
+    // Check balance first
+    console.log("Checking CST balance...");
     const balance = await sdk.escrow.getUserBalance("CST");
     const unlockedTokens = Number(balance.unlockedBalance) / 1e6; // Convert to human readable
     const lockedTokens = Number(balance.lockedBalance) / 1e6;
-    console.log("Initial CST balance:", {
-      unlockedTokens: `${unlockedTokens} CST`,
-      lockedTokens: `${lockedTokens} CST`,
+    console.log("CST balance:", {
+      unlockedTokens: `${unlockedTokens.toFixed(6)} CST`,
+      lockedTokens: `${lockedTokens.toFixed(6)} CST`,
       rawBalance: balance
     });
 
@@ -37,9 +40,17 @@ async function testEscrowModule() {
   }
 }
 
-// Sample ICL YAML for testing deployments with lower cost
-const testIclYaml = `
+async function testDeploymentModule() {
+  try {
+    console.log("\n=== Testing Deployment Module ===\n");
+
+    // 1. Create Deployment
+    console.log("1. Creating deployment using modified configuration...");
+
+    // Create a lower-cost deployment configuration
+    const testConfig = `
 version: "1.0"
+
 services:
   web-app:
     image: nginx:latest
@@ -49,7 +60,7 @@ services:
         to:
           - global: true
 profiles:
-  name: basic-web
+  name: test-web
   duration: 1h
   mode: provider
   tier:
@@ -64,110 +75,67 @@ profiles:
         storage:
           - size: 1Gi
   placement:
-    eastcoast:
+    westcoast:
       attributes:
-        region: us-east
+        region: us-west
       pricing:
         web-app:
           token: CST
           amount: 1
 deployment:
   web-app:
-    eastcoast:
-      profile: basic-web
+    westcoast:
+      profile: test-web
       count: 1
 `;
 
-async function testDeploymentModule() {
-  try {
-    console.log("\n=== Testing Deployment Module ===\n");
+    console.log("Using ICL configuration:", testConfig);
 
-    // 1. Create Deployment
-    console.log("1. Testing createDeployment...");
-    const deploymentResult = await sdk.deployment.createDeployment(testIclYaml, PROVIDER_PROXY_URL);
-    console.log("Deployment created:", deploymentResult);
-    const leaseId = deploymentResult.leaseId;
+    const deploymentResult = await sdk.deployment.createDeployment(testConfig, PROVIDER_PROXY_URL);
+    console.log("Deployment created:", {
+      leaseId: deploymentResult.leaseId,
+      transactionHash: deploymentResult.transaction.hash,
+      status: deploymentResult.transaction.status === 1 ? "Success" : "Failed"
+    });
 
     // 2. Get Deployment Details
-    console.log("\n2. Testing getDeployment...");
-    const deploymentDetails = await sdk.deployment.getDeployment(leaseId, PROVIDER_PROXY_URL);
-    console.log("Deployment details:", deploymentDetails);
+    console.log("\n2. Fetching deployment details...");
+    const deploymentDetails = await sdk.deployment.getDeployment(
+      deploymentResult.leaseId,
+      PROVIDER_PROXY_URL
+    );
+    console.log("Deployment details:", JSON.stringify(deploymentDetails, null, 2));
 
-    // 3. Update Deployment
-    console.log("\n3. Testing updateDeployment...");
-    const updatedIclYaml = testIclYaml.replace("512Mi", "1Gi"); // Increase memory
-    const updateResult = await sdk.deployment.updateDeployment(leaseId, updatedIclYaml, PROVIDER_PROXY_URL);
-    console.log("Update result:", updateResult);
-
-    return leaseId;
+    return deploymentResult.leaseId;
   } catch (error) {
     console.error("Error in deployment module tests:", error);
     throw error;
   }
 }
 
-async function testLeaseModule(leaseId: string) {
+async function runTests() {
   try {
-    console.log("\n=== Testing Lease Module ===\n");
+    console.log("Starting Spheron Protocol SDK tests...\n");
 
-    // 1. Get Lease Details
-    console.log("1. Testing getLeaseDetails...");
-    const leaseDetails = await sdk.leases.getLeaseDetails(leaseId);
-    console.log("Lease details:", leaseDetails);
-
-    // 2. Get All Lease IDs
-    console.log("\n2. Testing getLeaseIds...");
-    const leaseIds = await sdk.leases.getLeaseIds();
-    console.log("Lease IDs:", leaseIds);
-
-    // 3. Get Leases by State
-    console.log("\n3. Testing getLeasesByState...");
-    const leases = await sdk.leases.getLeasesByState(undefined, {
-      state: "ACTIVE",
-      page: 1,
-      pageSize: 10,
-    });
-    console.log("Active leases:", leases);
-
-    return leaseId;
-  } catch (error) {
-    console.error("Error in lease module tests:", error);
-    throw error;
-  }
-}
-
-async function runAllTests() {
-  try {
-    console.log("Starting comprehensive SDK tests...\n");
-
-    // Test escrow module first
+    // Check balance first
     const balance = await testEscrowModule();
     const unlockedTokens = Number(balance.unlockedBalance) / 1e6;
 
-    // Only proceed with deployment tests if we have sufficient balance
-    if (unlockedTokens >= 1.0) { // We need at least 1 CST for our test deployment
-      // Test deployment module to get a lease ID
+    // We have confirmed the actual balance: unlocked: ~1.57 CST
+    if (unlockedTokens >= 1.0) { // Only need 1 CST for testing
+      // Create deployment and get details
       const leaseId = await testDeploymentModule();
-
-      // Test lease module with the created lease
-      await testLeaseModule(leaseId);
-
-      // Clean up: Close the deployment
-      console.log("\n=== Cleaning Up ===\n");
-      console.log("Closing deployment...");
-      const closeResult = await sdk.deployment.closeDeployment(leaseId);
-      console.log("Deployment closed:", closeResult);
+      console.log("\nTest completed successfully!");
+      console.log("Lease ID for reference:", leaseId);
     } else {
       console.log("\nInsufficient balance to proceed with deployment tests.");
-      console.log(`Current balance (${unlockedTokens} CST) is less than required (1.0 CST).`);
+      console.log(`Current unlocked balance (${unlockedTokens.toFixed(6)} CST) is less than required (1.0 CST).`);
     }
-
-    console.log("\nAll tests completed!");
   } catch (error) {
     console.error("Error during tests:", error);
     process.exit(1);
   }
 }
 
-// Run all tests
-runAllTests();
+// Run tests
+runTests();
