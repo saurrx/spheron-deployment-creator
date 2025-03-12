@@ -11,8 +11,9 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Upload, Server, AlertCircle } from "lucide-react";
+import { Upload, Server, AlertCircle, RefreshCw } from "lucide-react";
 import { WalletStatus } from "@/components/ui/wallet-status";
+import { cn } from "@/lib/utils";
 
 const DEFAULT_ICL_CONFIG = `version: "1.0"
 
@@ -66,14 +67,8 @@ deployment:
       profile: ollama-test
       count: 1`;
 
-interface BalanceResponse {
-  lockedBalance: string;
-  unlockedBalance: string;
-}
-
 interface DeploymentResponse {
   deployment: {
-    id: number;
     name: string;
     status: string;
   };
@@ -83,34 +78,37 @@ interface DeploymentResponse {
     hash: string;
   };
   details: {
-    status: string;
     services: {
       [key: string]: {
+        name: string;
         available: number;
         total: number;
-        ready_replicas: number;
+        observed_generation: number;
         replicas: number;
-        uris?: string[];
-        container_statuses?: Array<{
+        updated_replicas: number;
+        ready_replicas: number;
+        available_replicas: number;
+        container_statuses: Array<{
           name: string;
           ready: boolean;
           state: {
             running?: { startedAt: string };
-            terminated?: { reason: string; exitCode: number };
             waiting?: { reason: string };
           };
         }>;
+        creationTimestamp: string;
       };
     };
     forwarded_ports: {
       [key: string]: Array<{
+        host: string;
         port: number;
         externalPort: number;
         proto: string;
         name: string;
-        host: string;
       }>;
     };
+    status: string;
   };
 }
 
@@ -173,6 +171,31 @@ export default function Home() {
     },
   });
 
+  const refreshDeploymentMutation = useMutation({
+    mutationFn: async (leaseId: string) => {
+      const res = await apiRequest("GET", `/api/deployments/${leaseId}`);
+      return res.json();
+    },
+    onSuccess: (data) => {
+      setDeploymentInfo(prev => ({
+        ...prev!,
+        details: data
+      }));
+      toast({
+        title: "Deployment Details Updated",
+        description: "Successfully fetched the latest deployment information.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+
   const onSubmit = (data: InsertDeployment) => {
     deployMutation.mutate(data);
   };
@@ -222,32 +245,58 @@ export default function Home() {
 
           {deploymentInfo && (
             <Card className="border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
-              <CardHeader>
+              <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>Deployment Details</CardTitle>
+                <Button 
+                  variant="outline"
+                  size="sm"
+                  onClick={() => refreshDeploymentMutation.mutate(deploymentInfo.transaction.leaseId)}
+                  disabled={refreshDeploymentMutation.isPending}
+                  className="border-2 border-black"
+                >
+                  <RefreshCw className={cn(
+                    "mr-2 h-4 w-4",
+                    refreshDeploymentMutation.isPending && "animate-spin"
+                  )} />
+                  Refresh Details
+                </Button>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
+                <div className="space-y-6">
                   <div>
-                    <h3 className="font-medium">Basic Information</h3>
-                    <p>Name: {deploymentInfo.deployment.name}</p>
-                    <p>Status: {deploymentInfo.deployment.status}</p>
-                    <p>Lease ID: {deploymentInfo.transaction.leaseId}</p>
-                    <p>Transaction Hash: {deploymentInfo.transaction.hash}</p>
+                    <h3 className="font-medium text-lg mb-2">Basic Information</h3>
+                    <div className="space-y-2">
+                      <p><span className="font-bold">Name:</span> {deploymentInfo.deployment.name}</p>
+                      <p><span className="font-bold">Status:</span> {deploymentInfo.deployment.status}</p>
+                      <p><span className="font-bold">Lease ID:</span> {deploymentInfo.transaction.leaseId}</p>
+                      <p><span className="font-bold">Transaction Hash:</span> {deploymentInfo.transaction.hash}</p>
+                    </div>
                   </div>
 
                   {deploymentInfo.details && (
                     <>
                       <div>
-                        <h3 className="font-medium">Deployment Status</h3>
-                        <p>Status: {deploymentInfo.details.status || 'Pending'}</p>
-                        {deploymentInfo.details.services && Object.entries(deploymentInfo.details.services).map(([serviceName, service]) => (
-                          <div key={serviceName}>
-                            <p>Service: {serviceName}</p>
-                            <p>Ready: {service.ready_replicas}/{service.replicas} replicas</p>
+                        <h3 className="font-medium text-lg mb-2">Services Status</h3>
+                        {Object.entries(deploymentInfo.details.services).map(([serviceName, service]) => (
+                          <div key={serviceName} className="border-2 border-black p-4 mb-4">
+                            <h4 className="font-bold mb-2">{service.name || serviceName}</h4>
+                            <div className="grid grid-cols-2 gap-2">
+                              <p><span className="font-bold">Available:</span> {service.available}/{service.total}</p>
+                              <p><span className="font-bold">Replicas:</span> {service.ready_replicas}/{service.replicas}</p>
+                              <p><span className="font-bold">Updated:</span> {service.updated_replicas}</p>
+                              <p><span className="font-bold">Generation:</span> {service.observed_generation}</p>
+                              <p><span className="font-bold">Created:</span> {new Date(service.creationTimestamp).toLocaleString()}</p>
+                            </div>
+
                             {service.container_statuses?.map((status, idx) => (
-                              <div key={idx}>
+                              <div key={idx} className="mt-2 pl-4 border-l-2 border-black">
+                                <p><span className="font-bold">Container:</span> {status.name}</p>
+                                <p><span className="font-bold">Ready:</span> {status.ready ? 'Yes' : 'No'}</p>
                                 {status.state.running && (
-                                  <p>Started: {new Date(status.state.running.startedAt).toLocaleString()}</p>
+                                  <p><span className="font-bold">Started:</span> {new Date(status.state.running.startedAt).toLocaleString()}</p>
+                                )}
+                                {status.state.waiting && (
+                                  <p><span className="font-bold">Waiting:</span> {status.state.waiting.reason}</p>
                                 )}
                               </div>
                             ))}
@@ -255,25 +304,26 @@ export default function Home() {
                         ))}
                       </div>
 
-
-                      {deploymentInfo.details.forwarded_ports &&
-                        Object.entries(deploymentInfo.details.forwarded_ports).length > 0 && (
-                          <div>
-                            <h3 className="font-medium">Forwarded Ports</h3>
-                            {Object.entries(deploymentInfo.details.forwarded_ports).map(([service, ports]) => (
-                              <div key={service} className="mt-2">
-                                <h4 className="font-medium">{service}:</h4>
-                                <ul className="list-disc list-inside">
-                                  {ports.map((port, idx) => (
-                                    <li key={idx}>
-                                      {port.proto.toUpperCase()} {port.host}:{port.externalPort} &rarr; {port.port} ({port.name})
-                                    </li>
-                                  ))}
-                                </ul>
-                              </div>
-                            ))}
-                          </div>
-                        )}
+                      {deploymentInfo.details.forwarded_ports && 
+                       Object.entries(deploymentInfo.details.forwarded_ports).length > 0 && (
+                        <div>
+                          <h3 className="font-medium text-lg mb-2">Forwarded Ports</h3>
+                          {Object.entries(deploymentInfo.details.forwarded_ports).map(([service, ports]) => (
+                            <div key={service} className="border-2 border-black p-4">
+                              <h4 className="font-bold mb-2">{service}</h4>
+                              <ul className="space-y-2">
+                                {ports.map((port, idx) => (
+                                  <li key={idx} className="flex items-center gap-2">
+                                    <span className="font-bold">{port.proto.toUpperCase()}</span>
+                                    <span>{port.host}:{port.externalPort} → {port.port}</span>
+                                    <span className="text-sm text-muted-foreground">({port.name})</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </>
                   )}
                 </div>
@@ -351,4 +401,9 @@ export default function Home() {
       </footer>
     </div>
   );
+}
+
+interface BalanceResponse {
+  lockedBalance: string;
+  unlockedBalance: string;
 }
