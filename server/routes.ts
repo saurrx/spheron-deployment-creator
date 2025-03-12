@@ -83,7 +83,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
    */
   app.get("/api/balance", async (req, res) => {
     try {
-      const balance = await sdk.escrow.getUserBalance("CST");
+      const walletAddress = "0x355A9b118Fd7f4b15A30572039316b362A0E5d8a";
+      const balance = await sdk.escrow.getUserBalance("CST", walletAddress);
       res.json(sanitizeResponse(balance));
     } catch (error: any) {
       console.error('Error fetching balance:', error);
