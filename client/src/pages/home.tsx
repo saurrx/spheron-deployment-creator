@@ -18,53 +18,51 @@ import { cn } from "@/lib/utils";
 const DEFAULT_ICL_CONFIG = `version: "1.0"
 
 services:
-  ollama-test:
-    image: ollama/ollama:0.3.12
+  py-cuda:
+    image: spheronnetwork/jupyter-notebook:pytorch-2.4.1-cuda-enabled
     pull_policy: IfNotPresent
     expose:
-      - port: 11434
-        as: 11434
+      - port: 8888
+        as: 8888
+        to:
+          - global: true
+      - port: 3000
+        as: 3000
         to:
           - global: true
     env:
-      - OLLAMA_MODEL=llama3.2
-    command:
-      - "sh"
-      - "-c"
-      - "apt update && apt install -y curl && /bin/ollama serve & while ! curl -s http://localhost:11434/api/tags > /dev/null; do sleep 1; done && /bin/ollama pull $OLLAMA_MODEL && /bin/ollama run $OLLAMA_MODEL 'Hello' && tail -f /dev/null"
+      - JUPYTER_TOKEN=test
+
 profiles:
-  name: ollama-testing
-  duration: 1h
+  name: py-cuda
+  duration: 2h
   mode: provider
-  tier:
-    - community
   compute:
-    ollama-test:
+    py-cuda:
       resources:
         cpu:
-          units: 1
+          units: 16
         memory:
-          size: 2Gi
+          size: 64Gi
         storage:
-          - size: 50Gi
+          - size: 500Gi
         gpu:
           units: 1
           attributes:
             vendor:
               nvidia:
-                - model: rtx4090
+                - model: rtx6000-ada
   placement:
     westcoast:
-      attributes:
-        region: us-west
       pricing:
-        ollama-test:
+        py-cuda:
           token: CST
-          amount: 5
+          amount: 1
+
 deployment:
-  ollama-test:
+  py-cuda:
     westcoast:
-      profile: ollama-test
+      profile: py-cuda
       count: 1`;
 
 interface DeploymentResponse {
