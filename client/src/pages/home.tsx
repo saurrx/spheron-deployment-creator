@@ -143,6 +143,12 @@ export default function Home() {
     queryKey: ["/api/balance"],
   });
 
+  // Format balance with proper decimals
+  const formatBalance = (rawBalance: string) => {
+    const balanceInCST = Number(rawBalance) / 1e6;
+    return balanceInCST.toFixed(6);
+  };
+
   const deployMutation = useMutation({
     mutationFn: async (data: InsertDeployment) => {
       const res = await apiRequest("POST", "/api/deployments", data);
@@ -189,10 +195,10 @@ export default function Home() {
             {escrowBalance ? (
               <div className="space-y-2">
                 <p className="text-lg">
-                  Available Balance: {escrowBalance.unlockedBalance} CST
+                  Available Balance: {formatBalance(escrowBalance.unlockedBalance)} CST
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  Locked in deployments: {escrowBalance.lockedBalance} CST
+                  Locked in deployments: {formatBalance(escrowBalance.lockedBalance)} CST
                 </p>
               </div>
             ) : (
